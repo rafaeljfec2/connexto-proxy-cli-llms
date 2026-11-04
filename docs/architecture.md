@@ -4,16 +4,17 @@
 
 A unified HTTP API that authenticates callers, resolves a runtime provider, runs an agent task, and returns a normalized result.
 
-## Current state (Phase 1)
+## Current state (Phase 2)
 
 ```
 Client ──HTTP──► apps/api (Fastify)
                       └── GET /health
 
-packages/core     AgentProvider, registry, router, executor (no HTTP yet)
+packages/core     AgentProvider, registry, router, executor
+packages/providers/cursor   Cursor SDK adapter (Phase 2)
 ```
 
-No provider adapters or persistence yet.
+No HTTP agent routes or durable session store yet. The Cursor adapter is library-only until Phase 3.
 
 ## Target layout (reference)
 

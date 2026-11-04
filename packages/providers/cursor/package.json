@@ -1,0 +1,17 @@
+{
+  "name": "@agent-runtime-gateway/provider-cursor",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test:integration": "vitest run tests/cursor.integration.test.ts"
+  },
+  "dependencies": {
+    "@agent-runtime-gateway/core": "workspace:*",
+    "@cursor/sdk": "^1.0.26"
+  }
+}

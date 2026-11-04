@@ -4,10 +4,11 @@
 
 This repository is a pnpm monorepo:
 
-| Path            | Package                       |
-| --------------- | ----------------------------- |
-| `apps/api`      | `@agent-runtime-gateway/api`  |
-| `packages/core` | `@agent-runtime-gateway/core` |
+| Path                        | Package                                  |
+| --------------------------- | ---------------------------------------- |
+| `apps/api`                  | `@agent-runtime-gateway/api`             |
+| `packages/core`             | `@agent-runtime-gateway/core`            |
+| `packages/providers/cursor` | `@agent-runtime-gateway/provider-cursor` |
 
 Future packages (`packages/providers/*`) are added in later phases.
 
@@ -31,7 +32,7 @@ pnpm test
 
 - [x] Phase 0 — Bootstrap, health check, tests
 - [x] Phase 1 — Core contracts and registry
-- [ ] Phase 2 — Cursor provider
+- [x] Phase 2 — Cursor provider
 - [ ] Phase 3 — `POST /v1/agents/run`
 - [ ] Phase 4 — Gateway authentication
 - [ ] Phase 5 — Sessions
