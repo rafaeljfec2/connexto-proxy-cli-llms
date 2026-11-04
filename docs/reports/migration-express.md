@@ -28,4 +28,3 @@ Migrate `apps/api` from Fastify to Express with TypeScript, preserving existing 
 - `pnpm test`: 8 passed, 1 skipped (26 tests passed, 2 integration tests skipped due to missing API key).
 - `pnpm format:check`: Clean.
 - `pnpm --filter @agent-runtime-gateway/api build`: Clean tsc compilation to `dist/`.
-

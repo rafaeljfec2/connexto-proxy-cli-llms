@@ -13,6 +13,9 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@agent-runtime-gateway/compatibility-openai": "workspace:*",
+    "@agent-runtime-gateway/core": "workspace:*",
+    "@agent-runtime-gateway/provider-cursor": "workspace:*",
     "express": "^5.3.0",
     "zod": "^4.1.12"
   },

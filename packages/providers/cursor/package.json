@@ -11,6 +11,7 @@
     "test:integration": "vitest run tests/cursor.integration.test.ts"
   },
   "dependencies": {
+    "@agent-runtime-gateway/compatibility-openai": "workspace:*",
     "@agent-runtime-gateway/core": "workspace:*",
     "@cursor/sdk": "^1.0.26"
   }

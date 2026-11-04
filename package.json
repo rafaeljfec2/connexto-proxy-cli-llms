@@ -14,6 +14,7 @@
   },
   "devDependencies": {
     "@agent-runtime-gateway/api": "workspace:*",
+    "@agent-runtime-gateway/compatibility-openai": "workspace:*",
     "@agent-runtime-gateway/core": "workspace:*",
     "@agent-runtime-gateway/provider-cursor": "workspace:*",
     "@eslint/js": "^9.39.1",

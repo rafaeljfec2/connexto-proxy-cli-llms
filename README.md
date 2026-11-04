@@ -2,12 +2,15 @@
 
 Personal multi-provider HTTP gateway for running development agents (Cursor and future providers).
 
-## Phase 0 (bootstrap)
+## Phase 3 (Composer API Full Port)
 
 Monorepo layout:
 
-- `apps/api` — Express HTTP server with `GET /health`
-- `tests/` — Vitest integration tests
+- `apps/api` — Express HTTP server with full Composer API endpoints (`/v1/chat/completions`, `/v1/responses`, `/v1/models`, etc.)
+- `packages/compatibility/openai` — Ported OpenAI/Composer protocol engine, SSE codecs, tool call adapters, response stores
+- `packages/core` — Provider-agnostic execution runtime, registry, and contracts
+- `packages/providers/cursor` — Official `@cursor/sdk` integration with session continuity
+- `tests/` — Vitest integration and HTTP compatibility test suite with Supertest
 
 ## Requirements
 

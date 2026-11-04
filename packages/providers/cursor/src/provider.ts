@@ -7,6 +7,8 @@ import type {
 } from "@agent-runtime-gateway/core";
 import type { Run, SDKAgent } from "@cursor/sdk";
 import { CursorClient } from "./client.js";
+import { defaultCursorDeps, defaultCursorEnv, verifyCursorApiKey } from "./cursor.js";
+import type { CursorMe } from "@agent-runtime-gateway/compatibility-openai";
 import { resolveCursorApiKey } from "./credential.js";
 import { normalizeCursorError } from "./errors.js";
 import {
@@ -54,6 +56,14 @@ export class CursorProvider implements AgentProvider {
     this.defaultWorkingDirectory = options.defaultWorkingDirectory ?? process.cwd();
     this.listingCredential =
       options.listingCredential ?? (() => process.env.CURSOR_API_KEY);
+  }
+
+  async verifyApiKey(apiKey: string): Promise<CursorMe> {
+    try {
+      return await verifyCursorApiKey(defaultCursorEnv(), defaultCursorDeps, apiKey);
+    } catch (error) {
+      throwNormalized(error);
+    }
   }
 
   async listModels(): Promise<Model[]> {

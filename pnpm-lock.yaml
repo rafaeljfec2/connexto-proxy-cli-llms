@@ -11,6 +11,9 @@ importers:
       '@agent-runtime-gateway/api':
         specifier: workspace:*
         version: link:apps/api
+      '@agent-runtime-gateway/compatibility-openai':
+        specifier: workspace:*
+        version: link:packages/compatibility/openai
       '@agent-runtime-gateway/core':
         specifier: workspace:*
         version: link:packages/core
@@ -53,6 +56,15 @@ importers:
 
   apps/api:
     dependencies:
+      '@agent-runtime-gateway/compatibility-openai':
+        specifier: workspace:*
+        version: link:../../packages/compatibility/openai
+      '@agent-runtime-gateway/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@agent-runtime-gateway/provider-cursor':
+        specifier: workspace:*
+        version: link:../../packages/providers/cursor
       express:
         specifier: ^5.3.0
         version: 5.3.0
@@ -67,10 +79,19 @@ importers:
         specifier: ^4.20.6
         version: 4.23.15
 
+  packages/compatibility/openai:
+    dependencies:
+      '@agent-runtime-gateway/core':
+        specifier: workspace:*
+        version: link:../../core
+
   packages/core: {}
 
   packages/providers/cursor:
     dependencies:
+      '@agent-runtime-gateway/compatibility-openai':
+        specifier: workspace:*
+        version: link:../../compatibility/openai
       '@agent-runtime-gateway/core':
         specifier: workspace:*
         version: link:../../core
