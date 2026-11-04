@@ -1,16 +1,16 @@
 import { buildApp } from "./app.js";
 import { loadEnv } from "./config/env.js";
 
-async function main(): Promise<void> {
+function main(): void {
   const env = loadEnv();
   const app = buildApp();
 
-  try {
-    await app.listen({ host: env.HOST, port: env.PORT });
-  } catch (error) {
-    app.log.error(error);
+  const server = app.listen(env.PORT, env.HOST);
+
+  server.on("error", (error: Error) => {
+    process.stderr.write(`${error.message}\n`);
     process.exit(1);
-  }
+  });
 }
 
-void main();
+main();

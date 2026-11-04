@@ -7,7 +7,7 @@ A unified HTTP API that authenticates callers, resolves a runtime provider, runs
 ## Current state (Phase 2)
 
 ```
-Client ──HTTP──► apps/api (Fastify)
+Client ──HTTP──► apps/api (Express)
                       └── GET /health
 
 packages/core     AgentProvider, registry, router, executor

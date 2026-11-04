@@ -6,7 +6,7 @@ Personal multi-provider HTTP gateway for running development agents (Cursor and 
 
 Monorepo layout:
 
-- `apps/api` — Fastify HTTP server with `GET /health`
+- `apps/api` — Express HTTP server with `GET /health`
 - `tests/` — Vitest integration tests
 
 ## Requirements

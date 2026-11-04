@@ -1,21 +1,17 @@
 import { buildApp } from "@agent-runtime-gateway/api";
+import request from "supertest";
 import { describe, expect, it } from "vitest";
 
 describe("GET /health", () => {
   it("returns ok status", async () => {
     const app = buildApp();
 
-    const response = await app.inject({
-      method: "GET",
-      url: "/health",
+    const response = await request(app).get("/health");
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({
+      status: "ok",
+      service: "agent-runtime-gateway",
     });
-
-    expect(response.statusCode).toBe(200);
-
-    const body: { status: string; service: string } = response.json();
-    expect(body.status).toBe("ok");
-    expect(body.service).toBe("agent-runtime-gateway");
-
-    await app.close();
   });
 });
