@@ -1,0 +1,31 @@
+{
+  "name": "agent-runtime-gateway",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "pnpm --filter @agent-runtime-gateway/api dev",
+    "start": "pnpm --filter @agent-runtime-gateway/api start",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "pnpm -r typecheck && tsc -p tsconfig.tests.json --noEmit",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "devDependencies": {
+    "@agent-runtime-gateway/api": "workspace:*",
+    "@eslint/js": "^9.39.1",
+    "@types/node": "^24.10.0",
+    "eslint": "^9.39.1",
+    "eslint-config-prettier": "^10.1.8",
+    "globals": "^16.5.0",
+    "prettier": "^3.6.2",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.46.3",
+    "vitest": "^4.0.8"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "packageManager": "pnpm@11.12.0"
+}
