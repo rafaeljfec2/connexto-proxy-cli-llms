@@ -4,14 +4,16 @@
 
 A unified HTTP API that authenticates callers, resolves a runtime provider, runs an agent task, and returns a normalized result.
 
-## Current state (Phase 0)
+## Current state (Phase 1)
 
 ```
 Client ──HTTP──► apps/api (Fastify)
                       └── GET /health
+
+packages/core     AgentProvider, registry, router, executor (no HTTP yet)
 ```
 
-No provider layer, registry, or persistence yet.
+No provider adapters or persistence yet.
 
 ## Target layout (reference)
 

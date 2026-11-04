@@ -11,6 +11,9 @@ importers:
       '@agent-runtime-gateway/api':
         specifier: workspace:*
         version: link:apps/api
+      '@agent-runtime-gateway/core':
+        specifier: workspace:*
+        version: link:packages/core
       '@eslint/js':
         specifier: ^9.39.1
         version: 9.39.5
@@ -51,6 +54,8 @@ importers:
       tsx:
         specifier: ^4.20.6
         version: 4.23.15
+
+  packages/core: {}
 
 packages:
 
