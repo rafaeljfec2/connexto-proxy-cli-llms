@@ -11,7 +11,7 @@ function main(): void {
   });
   setLogger(logger);
 
-  const app = buildApp();
+  const app = buildApp(env);
 
   const server = app.listen(env.PORT, env.HOST, () => {
     logger.info(

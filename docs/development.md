@@ -18,7 +18,8 @@ Root `package.json` holds shared devDependencies (Vitest, ESLint, Prettier, Supe
 ```bash
 pnpm install
 cp .env.example .env
-# Edit .env — set CURSOR_API_KEY for live agent tests
+# Edit .env — set CURSOR_API_KEY for real agent execution
+# A gateway token is optional while HOST remains loopback.
 ```
 
 ## Run locally
@@ -27,6 +28,8 @@ cp .env.example .env
 pnpm dev
 # http://127.0.0.1:3000
 ```
+
+The default loopback mode may omit `GATEWAY_API_TOKEN` for existing local clients. Set the token to require authentication from local clients too. To allow remote clients, set a non-loopback `HOST` and a unique `GATEWAY_API_TOKEN`; startup fails if the token is missing. Send the gateway token as `X-Gateway-API-Key` and keep it separate from the Cursor credential in `Authorization` or `x-api-key`. See [configuration.md](configuration.md) for the endpoint allowlist and deployment examples.
 
 Build and run compiled output:
 
@@ -85,7 +88,7 @@ await request(app).get("/health");
 | 1 — Core                 | Done    | Registry, router, executor                                   |
 | 2 — Cursor provider      | Done    | `@cursor/sdk` + engine port                                  |
 | 3 — First HTTP execution | Done    | Composer API port (OpenAI routes), not `POST /v1/agents/run` |
-| 4 — Gateway auth         | Open    | `GATEWAY_API_TOKEN` not enforced                             |
+| 4 — Gateway auth         | Done    | Separate gateway token; remote binds require configuration   |
 | 5 — Sessions             | Partial | Session affinity headers + Cursor resume                     |
 | 6 — Streaming            | Done    | SSE on chat/responses                                        |
 | 7 — Antigravity          | Open    | Second provider                                              |

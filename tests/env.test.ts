@@ -8,6 +8,42 @@ describe("loadEnv", () => {
     expect(env.PORT).toBe(3000);
     expect(env.LOG_FORMAT).toBe("json");
     expect(env.LOG_LEVEL).toBe("info");
+    expect(env.GATEWAY_API_TOKEN).toBeUndefined();
+  });
+
+  it("allows local binding without a gateway token", () => {
+    expect(loadEnv({ HOST: "127.0.0.1" }).GATEWAY_API_TOKEN).toBeUndefined();
+    expect(loadEnv({ HOST: "127.0.0.2" }).HOST).toBe("127.0.0.2");
+    expect(loadEnv({ HOST: "::1" }).HOST).toBe("::1");
+    expect(loadEnv({ HOST: "localhost" }).HOST).toBe("localhost");
+  });
+
+  it("requires a gateway token for non-loopback binding", () => {
+    expect(() => loadEnv({ HOST: "0.0.0.0" })).toThrow(
+      "GATEWAY_API_TOKEN is required when HOST is not loopback",
+    );
+    expect(() => loadEnv({ HOST: "192.168.1.10", GATEWAY_API_TOKEN: " " })).toThrow(
+      "GATEWAY_API_TOKEN is required when HOST is not loopback",
+    );
+  });
+
+  it("accepts a gateway token for remote binding and trims configuration whitespace", () => {
+    const env = loadEnv({
+      HOST: "0.0.0.0",
+      GATEWAY_API_TOKEN: "  synthetic-token  ",
+    });
+
+    expect(env.GATEWAY_API_TOKEN).toBe("synthetic-token");
+  });
+
+  it("rejects reusing the Cursor credential as the gateway token", () => {
+    expect(() =>
+      loadEnv({
+        HOST: "127.0.0.1",
+        GATEWAY_API_TOKEN: "synthetic-shared-token",
+        CURSOR_API_KEY: "synthetic-shared-token",
+      }),
+    ).toThrow("GATEWAY_API_TOKEN must be different from CURSOR_API_KEY");
   });
 
   it("accepts valid LOG_FORMAT and LOG_LEVEL", () => {

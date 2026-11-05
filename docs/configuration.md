@@ -16,32 +16,37 @@ On startup, `apps/api/src/server.ts`:
 
 Validated by `loadEnv()`:
 
-| Variable     | Default     | Description                                                               |
-| ------------ | ----------- | ------------------------------------------------------------------------- |
-| `HOST`       | `127.0.0.1` | Bind address. Use loopback unless you understand exposure risks.          |
-| `PORT`       | `3000`      | TCP port.                                                                 |
-| `LOG_FORMAT` | `json`      | `json` (NDJSON) or `pretty` (colorized terminal via `pino-pretty`).       |
-| `LOG_LEVEL`  | `info`      | `fatal` \| `error` \| `warn` \| `info` \| `debug` \| `trace` \| `silent`. |
+| Variable            | Default     | Description                                                                            |
+| ------------------- | ----------- | -------------------------------------------------------------------------------------- |
+| `HOST`              | `127.0.0.1` | Bind address. Use loopback unless you understand exposure risks.                       |
+| `PORT`              | `3000`      | TCP port.                                                                              |
+| `GATEWAY_API_TOKEN` | unset       | Gateway credential. Required for non-loopback binding; optional in loopback-only mode. |
+| `LOG_FORMAT`        | `json`      | `json` (NDJSON) or `pretty` (colorized terminal via `pino-pretty`).                    |
+| `LOG_LEVEL`         | `info`      | `fatal` \| `error` \| `warn` \| `info` \| `debug` \| `trace` \| `silent`.              |
 
 ### Local development example
 
 ```env
 HOST=127.0.0.1
 PORT=3000
+GATEWAY_API_TOKEN=
 LOG_FORMAT=pretty
 LOG_LEVEL=debug
 ```
+
+Without a gateway token, loopback binding is treated as a trusted local-only mode to preserve existing local clients. If a token is configured, private endpoints require it even on loopback.
 
 ### Container / production-style example
 
 ```env
 HOST=0.0.0.0
 PORT=3000
+GATEWAY_API_TOKEN=<set-a-random-secret>
 LOG_FORMAT=json
 LOG_LEVEL=info
 ```
 
-If you bind to non-loopback addresses, combine with firewall rules and a planned **gateway credential** (not implemented yet).
+Startup fails when `HOST` is not a loopback address and `GATEWAY_API_TOKEN` is empty. Use a unique high-entropy value and expose remote access only through a trusted network or a TLS-terminating proxy. The gateway rejects configuration where this value equals `CURSOR_API_KEY`.
 
 ## Cursor provider variables
 
@@ -51,11 +56,16 @@ If you bind to non-loopback addresses, combine with firewall rules and a planned
 
 **Never commit** this value. `.env` is gitignored.
 
-## Gateway token (planned)
+## Gateway authentication
 
-| Variable            | Status                                                                                                                                 |
-| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| `GATEWAY_API_TOKEN` | Listed in `.env.example` only — **not read** by the current Express app. Future work: separate gateway auth from Cursor provider auth. |
+When `GATEWAY_API_TOKEN` is set, send it in the dedicated `X-Gateway-API-Key` header. It is checked independently from the Cursor credential. The gateway does not accept the token from a query string, `Authorization`, or `x-api-key`.
+
+```http
+X-Gateway-API-Key: <GATEWAY_API_TOKEN>
+Authorization: Bearer <CURSOR_API_KEY>
+```
+
+When gateway authentication is enabled, the public endpoints are `GET /`, `GET /v1`, `GET /health`, `GET /v1/models`, and `GET /v1/models/:model`. All other application routes require the gateway token. Without a token, loopback binding remains the trusted local-only boundary. `OPTIONS` requests are handled as CORS preflight and do not access application data. CORS is not an authentication mechanism.
 
 ## Authentication
 
@@ -67,14 +77,14 @@ Provider routes (chat, completions, responses, etc.) resolve the **Cursor API ke
 
 If no key is resolved, endpoints that call Cursor return **401** with an OpenAI-style error payload (`Missing Cursor API key`).
 
-### Two different secrets (conceptual)
+### Separate credentials
 
-| Secret                 | Purpose                                                         |
-| ---------------------- | --------------------------------------------------------------- |
-| Cursor API key         | Authenticates **to Cursor** for agent execution                 |
-| Gateway token (future) | Would authenticate **to this gateway** before any provider work |
+| Secret         | Purpose                                                         |
+| -------------- | --------------------------------------------------------------- |
+| Cursor API key | Authenticates **to Cursor** for agent execution                 |
+| Gateway token  | Authenticates **to this gateway** before private route handling |
 
-Today only the Cursor key path is active.
+Keep the values different. A gateway token sent only in `X-Gateway-API-Key` is never treated as a Cursor key. `Authorization` and `x-api-key` continue to identify the caller to Cursor or use the configured Cursor fallback.
 
 ## Session affinity
 
