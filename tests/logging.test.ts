@@ -63,7 +63,9 @@ describe("Gateway Logging and Request Correlation", () => {
 
   it("generates and attaches X-Request-ID header to every response and exposes it in CORS", async () => {
     const app = buildApp();
-    const res = await request(app).get("/health");
+    const res = await request(app)
+      .get("/health")
+      .set("Origin", "http://localhost:5173");
 
     expect(res.status).toBe(200);
     const requestId = res.headers["x-request-id"];
@@ -72,8 +74,8 @@ describe("Gateway Logging and Request Correlation", () => {
       /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
     );
 
+    expect(res.headers["access-control-allow-origin"]).toBe("http://localhost:5173");
     expect(res.headers["access-control-expose-headers"]).toContain("X-Request-ID");
-    expect(res.headers["access-control-allow-headers"]).toContain("x-request-id");
   });
 
   it("always generates a new server-side X-Request-ID ignoring client-provided value", async () => {

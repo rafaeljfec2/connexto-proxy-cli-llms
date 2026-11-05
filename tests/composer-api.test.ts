@@ -1,4 +1,4 @@
-import { buildApp } from "@agent-runtime-gateway/api";
+import { buildApp, loadEnv } from "@agent-runtime-gateway/api";
 import { getGatewayServices } from "../apps/api/src/services/gateway.js";
 import {
   createCompletedRun,
@@ -8,7 +8,12 @@ import request from "supertest";
 import { beforeAll, describe, expect, it } from "vitest";
 
 describe("Composer API HTTP Compatibility Suite", () => {
-  const app = buildApp();
+  const app = buildApp(
+    loadEnv({
+      HOST: "127.0.0.1",
+      CORS_ORIGINS: "http://localhost:5173",
+    }),
+  );
   const services = getGatewayServices();
 
   beforeAll(() => {
@@ -30,10 +35,22 @@ describe("Composer API HTTP Compatibility Suite", () => {
 
   describe("CORS and Options", () => {
     it("responds 204 to OPTIONS requests with proper CORS headers", async () => {
-      const res = await request(app).options("/v1/chat/completions");
+      const res = await request(app)
+        .options("/v1/chat/completions")
+        .set("Origin", "http://localhost:5173")
+        .set("Access-Control-Request-Method", "POST")
+        .set(
+          "Access-Control-Request-Headers",
+          "authorization,content-type,x-gateway-api-key",
+        );
       expect(res.status).toBe(204);
-      expect(res.headers["access-control-allow-origin"]).toBe("*");
+      expect(res.headers["access-control-allow-origin"]).toBe("http://localhost:5173");
       expect(res.headers["access-control-allow-methods"]).toContain("POST");
+      expect(res.headers["access-control-allow-headers"]).toContain(
+        "x-gateway-api-key",
+      );
+      expect(res.headers["access-control-expose-headers"]).toBeUndefined();
+      expect(res.headers["access-control-allow-credentials"]).toBeUndefined();
     });
   });
 

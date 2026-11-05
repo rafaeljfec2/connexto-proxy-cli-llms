@@ -89,7 +89,9 @@ In-memory response storage is provided by `ResponseSessionStore` in the compatib
 
 ## CORS & preflight
 
-All routes support `OPTIONS` with `204`. Allowed methods: `GET`, `POST`, `DELETE`.
+Browser origins follow the configured `CORS_ORIGINS` policy described in [configuration.md](configuration.md). The gateway never returns `Access-Control-Allow-Origin: *`. A preflight from an allowed origin receives `204` only when its requested method and headers are supported; the response grants only that method and the allowed request headers it asked for. An unconfigured origin or unsupported method/header receives `403` without CORS authorization headers. `OPTIONS` without an `Origin` continues to return an empty `204` without CORS authorization.
+
+CORS preflight does not authenticate or authorize access to API data. The actual request must still pass gateway authentication when enabled. Requests without `Origin`, including CLI and server-to-server clients, continue through the normal route and authentication rules.
 
 ## Correlation id
 

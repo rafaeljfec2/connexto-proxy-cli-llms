@@ -21,6 +21,7 @@ Validated by `loadEnv()`:
 | `HOST`              | `127.0.0.1` | Bind address. Use loopback unless you understand exposure risks.                       |
 | `PORT`              | `3000`      | TCP port.                                                                              |
 | `GATEWAY_API_TOKEN` | unset       | Gateway credential. Required for non-loopback binding; optional in loopback-only mode. |
+| `CORS_ORIGINS`      | unset       | Comma-separated browser origins. Invalid values and wildcards fail startup.            |
 | `LOG_FORMAT`        | `json`      | `json` (NDJSON) or `pretty` (colorized terminal via `pino-pretty`).                    |
 | `LOG_LEVEL`         | `info`      | `fatal` \| `error` \| `warn` \| `info` \| `debug` \| `trace` \| `silent`.              |
 
@@ -34,7 +35,13 @@ LOG_FORMAT=pretty
 LOG_LEVEL=debug
 ```
 
-Without a gateway token, loopback binding is treated as a trusted local-only mode to preserve existing local clients. If a token is configured, private endpoints require it even on loopback.
+Without `CORS_ORIGINS`, loopback binding allows browser origins whose host is `localhost` or a loopback IP. Set `CORS_ORIGINS` to an explicit list to replace that local policy, or set it to an empty value to disable browser CORS. Origin-less CLI and server-to-server calls continue normally. If a gateway token is configured, private endpoints require it even on loopback.
+
+For a local browser application on port 5173, configure an exact origin when you want to replace the default local policy:
+
+```env
+CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
+```
 
 ### Container / production-style example
 
@@ -42,6 +49,7 @@ Without a gateway token, loopback binding is treated as a trusted local-only mod
 HOST=0.0.0.0
 PORT=3000
 GATEWAY_API_TOKEN=<set-a-random-secret>
+CORS_ORIGINS=https://app.example.com,https://admin.example.com
 LOG_FORMAT=json
 LOG_LEVEL=info
 ```
@@ -58,6 +66,8 @@ Startup fails when `HOST` is not a loopback address and `GATEWAY_API_TOKEN` is e
 
 ## Gateway authentication
 
+`CORS_ORIGINS` accepts a comma-separated list of HTTP(S) origins, including scheme and optional port. Host casing, default ports, and one trailing root slash are normalized; duplicates are removed. Non-root paths, query strings, fragments, credentials, wildcards, non-HTTP(S) schemes, malformed values, and empty entries are rejected at startup. Add one exact origin per browser application; its port and scheme are part of the origin.
+
 When `GATEWAY_API_TOKEN` is set, send it in the dedicated `X-Gateway-API-Key` header. It is checked independently from the Cursor credential. The gateway does not accept the token from a query string, `Authorization`, or `x-api-key`.
 
 ```http
@@ -65,7 +75,11 @@ X-Gateway-API-Key: <GATEWAY_API_TOKEN>
 Authorization: Bearer <CURSOR_API_KEY>
 ```
 
-When gateway authentication is enabled, the public endpoints are `GET /`, `GET /v1`, `GET /health`, `GET /v1/models`, and `GET /v1/models/:model`. All other application routes require the gateway token. Without a token, loopback binding remains the trusted local-only boundary. `OPTIONS` requests are handled as CORS preflight and do not access application data. CORS is not an authentication mechanism.
+When gateway authentication is enabled, the public endpoints are `GET /`, `GET /v1`, `GET /health`, `GET /v1/models`, and `GET /v1/models/:model`. All other application routes require the gateway token. Without a token, loopback binding remains the trusted local-only boundary. A permitted CORS preflight is handled before authentication because it does not access application data; the resulting request still requires normal gateway authentication. CORS is a browser access policy, not authentication.
+
+If `Origin` is absent, the API sends no CORS authorization headers and handles the request under its normal route and authentication rules. A disallowed origin is never reflected in `Access-Control-Allow-Origin`. Preflight requests from an allowed origin must use an allowed API method and request headers; unsupported preflights receive `403`, and successful preflights grant only the requested method and allowed requested headers. The API does not enable cookies or `Access-Control-Allow-Credentials`.
+
+Preflight methods are `GET`, `POST`, `DELETE`, and `OPTIONS`. Allowed request headers are `authorization`, `content-type`, `x-api-key`, `x-gateway-api-key`, `idempotency-key`, `x-session-affinity`, `x-opencode-session-id`, `x-opencode-session`, and `x-request-id`.
 
 ## Authentication
 
@@ -98,7 +112,7 @@ These map to gateway `sessionId` values passed into the Cursor provider for resu
 
 ## CORS
 
-The API sets permissive CORS (`Access-Control-Allow-Origin: *`) and exposes `X-Request-ID`. Restrict origins at a reverse proxy if you deploy beyond localhost.
+The API does not use wildcard CORS. With a loopback `HOST` and no `CORS_ORIGINS`, the local policy permits only HTTP(S) origins on `localhost` or loopback IP addresses. An explicit `CORS_ORIGINS` list replaces that policy. A remote bind has no browser origins allowed unless they are explicitly listed. Origin-less CLI and server-to-server requests continue to work and remain subject to gateway authentication.
 
 ## Further reading
 

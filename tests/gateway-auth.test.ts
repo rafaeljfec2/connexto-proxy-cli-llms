@@ -1,7 +1,7 @@
 import { Writable } from "node:stream";
 import request from "supertest";
 import { beforeAll, describe, expect, it, vi } from "vitest";
-import { buildApp, createLogger, setLogger } from "@agent-runtime-gateway/api";
+import { buildApp, createLogger, loadEnv, setLogger } from "@agent-runtime-gateway/api";
 import type { AgentExecutionInput } from "@agent-runtime-gateway/core";
 import { getGatewayServices } from "../apps/api/src/services/gateway.js";
 import {
@@ -20,10 +20,13 @@ const providerExecute = vi.fn((input: AgentExecutionInput) =>
 );
 
 function createAuthenticatedApp() {
-  return buildApp({
-    HOST: "127.0.0.1",
-    GATEWAY_API_TOKEN: gatewayToken,
-  });
+  return buildApp(
+    loadEnv({
+      HOST: "127.0.0.1",
+      GATEWAY_API_TOKEN: gatewayToken,
+      CORS_ORIGINS: "http://localhost:5173",
+    }),
+  );
 }
 
 describe("gateway authentication", () => {
@@ -58,7 +61,11 @@ describe("gateway authentication", () => {
       request(app).get("/v1/models"),
       request(app).get("/v1/models/composer-2.5"),
       request(app).head("/health"),
-      request(app).options("/v1/chat/completions"),
+      request(app)
+        .options("/v1/chat/completions")
+        .set("Origin", "http://localhost:5173")
+        .set("Access-Control-Request-Method", "POST")
+        .set("Access-Control-Request-Headers", "x-gateway-api-key"),
     ]);
 
     expect(responses.map(({ status }) => status)).toEqual([

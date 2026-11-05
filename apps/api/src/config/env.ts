@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
 import { z } from "zod";
+import { parseCorsOrigins } from "./cors.js";
 import { isLoopbackHost } from "../utils/network.js";
 import { secureTokenEquals } from "../utils/secure-token.js";
 
@@ -28,6 +29,7 @@ const envSchema = z
       .trim()
       .optional()
       .transform((token) => token || undefined),
+    CORS_ORIGINS: z.string().optional().transform(parseCorsOrigins),
     LOG_FORMAT: logFormatSchema.default("json"),
     LOG_LEVEL: logLevelSchema.default("info"),
   })

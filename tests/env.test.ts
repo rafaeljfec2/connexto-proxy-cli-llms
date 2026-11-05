@@ -72,4 +72,42 @@ describe("loadEnv", () => {
     expect(() => loadEnv({ PORT: "abc" })).toThrow();
     expect(() => loadEnv({ PORT: "0" })).toThrow();
   });
+
+  describe("CORS_ORIGINS", () => {
+    it("leaves origins unset by default for the runtime local-origin policy", () => {
+      expect(Reflect.get(loadEnv({}), "CORS_ORIGINS")).toBeUndefined();
+    });
+
+    it("normalizes and deduplicates a comma-separated origin list", () => {
+      const env = loadEnv({
+        CORS_ORIGINS:
+          " HTTPS://APP.EXAMPLE.COM:443/ , http://localhost:5173, https://app.example.com ",
+      });
+
+      expect(Reflect.get(env, "CORS_ORIGINS")).toEqual([
+        "https://app.example.com",
+        "http://localhost:5173",
+      ]);
+    });
+
+    it("allows an explicitly empty origin list", () => {
+      expect(Reflect.get(loadEnv({ CORS_ORIGINS: "" }), "CORS_ORIGINS")).toEqual([]);
+    });
+
+    it.each([
+      "*",
+      "https://*.example.com",
+      "https://app.example.com/path",
+      "https://app.example.com:",
+      "https://user:password@app.example.com",
+      "https://app.example.com?query=value",
+      "https://app.example.com,# https://other.example.com",
+      "file://app.example.com",
+      "https://app.example.com,,https://other.example.com",
+    ])("rejects invalid origin configuration: %s", (value) => {
+      expect(() => loadEnv({ CORS_ORIGINS: value })).toThrow(
+        "CORS_ORIGINS must contain valid HTTP(S) origins",
+      );
+    });
+  });
 });
