@@ -7,6 +7,7 @@ import { registerHealthRoutes } from "./routes/health.js";
 import { registerMetaRoutes } from "./routes/meta.js";
 import { registerModelRoutes } from "./routes/models.js";
 import { registerResponseRoutes } from "./routes/responses.js";
+import { registerSwaggerRoutes } from "./routes/swagger.js";
 import { loadEnv, type Env } from "./config/env.js";
 import { createGatewayAuthMiddleware } from "./utils/gateway-auth.js";
 import { createCorsMiddleware } from "./utils/cors.js";
@@ -65,6 +66,8 @@ export function buildApp(
       origins: config.CORS_ORIGINS,
     }),
   );
+
+  registerSwaggerRoutes(app);
 
   app.use(createGatewayAuthMiddleware(config));
   app.use(express.json());

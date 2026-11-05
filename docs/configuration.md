@@ -30,6 +30,8 @@ Validated by `loadEnv()`:
 | `SESSION_TTL_MS`                | `86400000`  | TTL for inactive Cursor session affinity records (24 hours). Sessions referenced by active executions are skipped.                                                                                                                                   |
 | `LIFECYCLE_CLEANUP_INTERVAL_MS` | `60000`     | Interval for the in-process cleanup timer (1 minute). Uses `setInterval` with `unref()` so it does not keep the process alive alone.                                                                                                                 |
 
+**Cursor local agent (ripgrep):** the SDK runs `rg` with flags such as `--no-require-git`, which **ripgrep 11.x** (`/usr/bin/rg` on many WSL installs) does not support. On startup the API prepends `@vscode/ripgrep` to `PATH`. Optional override: `RIPGREP_PATH=/full/path/to/rg`.
+
 ### Local development example
 
 ```env

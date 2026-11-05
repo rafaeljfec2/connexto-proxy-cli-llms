@@ -2,9 +2,11 @@ import { buildApp } from "./app.js";
 import { loadEnv, loadEnvFileIfPresent } from "./config/env.js";
 import { initializeGatewayServices } from "./services/gateway.js";
 import { createLogger, setLogger } from "./utils/logger.js";
+import { preferCompatibleRipgrepOnPath } from "./utils/ripgrep-path.js";
 
 function main(): void {
   loadEnvFileIfPresent();
+  preferCompatibleRipgrepOnPath();
   const env = loadEnv();
   const logger = createLogger({
     format: env.LOG_FORMAT,

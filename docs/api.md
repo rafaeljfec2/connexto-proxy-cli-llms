@@ -46,6 +46,15 @@ Consumers may attach continuity to provider execution with the `x-session-affini
 | `GET`  | `/`       | No           | Service metadata and model id list                                                                                                              |
 | `GET`  | `/v1`     | No           | Same as `/`                                                                                                                                     |
 
+## Interactive API docs (Swagger UI)
+
+| Method | Path           | Gateway auth | Description                                      |
+| ------ | -------------- | ------------ | ------------------------------------------------ |
+| `GET`  | `/docs`        | No           | Swagger UI for trying endpoints from the browser |
+| `GET`  | `/openapi.json`| No           | OpenAPI 3.0 document                             |
+
+Register **Authorize** with `X-Gateway-API-Key` (when configured) and **Bearer** / `x-api-key` for the Cursor credential before calling protected routes. Docs are registered before gateway auth (intended for local development on loopback).
+
 ## Models
 
 | Method | Path                | Gateway auth | Description                                |
