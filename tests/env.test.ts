@@ -73,6 +73,21 @@ describe("loadEnv", () => {
     expect(() => loadEnv({ PORT: "0" })).toThrow();
   });
 
+  describe("runtime lifecycle configuration", () => {
+    it("applies conservative defaults", () => {
+      const env = loadEnv({});
+      expect(env.RESPONSE_TTL_MS).toBe(3_600_000);
+      expect(env.RESPONSE_MAX_ENTRIES).toBe(512);
+      expect(env.SESSION_TTL_MS).toBe(86_400_000);
+      expect(env.LIFECYCLE_CLEANUP_INTERVAL_MS).toBe(60_000);
+    });
+
+    it("rejects non-positive lifecycle values", () => {
+      expect(() => loadEnv({ RESPONSE_TTL_MS: "0" })).toThrow();
+      expect(() => loadEnv({ LIFECYCLE_CLEANUP_INTERVAL_MS: "-1" })).toThrow();
+    });
+  });
+
   describe("CORS_ORIGINS", () => {
     it("leaves origins unset by default for the runtime local-origin policy", () => {
       expect(Reflect.get(loadEnv({}), "CORS_ORIGINS")).toBeUndefined();
@@ -108,6 +123,62 @@ describe("loadEnv", () => {
       expect(() => loadEnv({ CORS_ORIGINS: value })).toThrow(
         "CORS_ORIGINS must contain valid HTTP(S) origins",
       );
+    });
+  });
+
+  describe("GATEWAY_API_TOKENS", () => {
+    it("is absent by default", () => {
+      expect(Reflect.get(loadEnv({}), "GATEWAY_API_TOKENS")).toBeUndefined();
+    });
+
+    it("parses a comma-separated credential list", () => {
+      const env = loadEnv({
+        GATEWAY_API_TOKENS: " token-one , ,token-two,  ",
+      });
+      expect(Reflect.get(env, "GATEWAY_API_TOKENS")).toEqual([
+        "token-one",
+        "token-two",
+      ]);
+    });
+
+    it("satisfies the non-loopback requirement with the secondary list", () => {
+      const env = loadEnv({
+        HOST: "0.0.0.0",
+        GATEWAY_API_TOKENS: "token-one,token-two",
+      });
+      expect(Reflect.get(env, "GATEWAY_API_TOKENS")).toEqual([
+        "token-one",
+        "token-two",
+      ]);
+    });
+
+    it("rejects reusing the Cursor credential in the secondary list", () => {
+      expect(() =>
+        loadEnv({
+          HOST: "127.0.0.1",
+          GATEWAY_API_TOKENS: "token-one,token-two",
+          CURSOR_API_KEY: "token-two",
+        }),
+      ).toThrow("GATEWAY_API_TOKENS must be different from CURSOR_API_KEY");
+    });
+    it("deduplicates repeated entries in the credential list", () => {
+      const env = loadEnv({
+        GATEWAY_API_TOKENS: "token-one,token-two,token-one",
+      });
+      expect(Reflect.get(env, "GATEWAY_API_TOKENS")).toEqual([
+        "token-one",
+        "token-two",
+      ]);
+    });
+
+    it("rejects GATEWAY_API_TOKEN also present in GATEWAY_API_TOKENS", () => {
+      expect(() =>
+        loadEnv({
+          HOST: "127.0.0.1",
+          GATEWAY_API_TOKEN: "token-one",
+          GATEWAY_API_TOKENS: "token-one",
+        }),
+      ).toThrow("GATEWAY_API_TOKENS must be different from GATEWAY_API_TOKEN");
     });
   });
 });

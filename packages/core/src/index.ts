@@ -16,3 +16,4 @@ export {
 export { ProviderRegistry } from "./registry/provider-registry.js";
 export { ProviderRouter } from "./router/provider-router.js";
 export { RuntimeExecutor } from "./runtime/runtime-executor.js";
+export { ActiveResourceTracker } from "./runtime/active-resource-tracker.js";

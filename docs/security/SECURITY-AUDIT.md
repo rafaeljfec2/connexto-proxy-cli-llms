@@ -126,7 +126,7 @@ Route catches return `safeErr.message` to the client. `toSafeError` preserves th
 ### AUD-05 — Caller-controlled session affinity is not bound to a principal
 
 **Severity:** MEDIUM  
-**Status:** Potential cross-session exposure; no external provider validation was performed  
+**Status:** Original finding confirmed at review time; remediated by Phase 4 session isolation on 2026-11-05 (offline-verified)
 **Files:** `apps/api/src/utils/session.ts:3-13`, `apps/api/src/routes/chat-completions.ts:66-77`, `apps/api/src/routes/responses/create.ts:76-89`, `packages/providers/cursor/src/sessions.ts:13-47`, `packages/providers/cursor/src/provider.ts:85-115`
 
 `x-session-affinity` and `x-opencode-session` are accepted without validation and used as the session map key. The shared `CursorSessionManager` indexes sessions only by that string, not by a gateway identity or credential. The environment key fallback can make requests from multiple callers use the same Cursor account. If two callers use the same known affinity value, the second request can resume the agent associated with the first value.
@@ -140,6 +140,10 @@ Route catches return `safeErr.message` to the client. `toSafeError` preserves th
 **Recommendation:** Authenticate callers and scope session keys to a stable principal or credential identity. Prefer server-issued opaque session IDs and validate accepted header length and format.
 
 **Correction test:** With a mocked session manager, submit identical affinity values under two principals and assert they map to separate remote agent records. Add a provider integration test only when an approved test account is available.
+
+**Remediation (2026-11-05, Phase 4):** Every gateway credential (`GATEWAY_API_TOKEN`, optionally plus a comma-separated `GATEWAY_API_TOKENS` list) now maps to an internal principal derived as a SHA-256 digest of the credential; the raw token is never stored, logged, or returned. The authentication middleware stamps the principal on the request context after the Phase 1 token check. Each stored Response records its owner principal at creation, and every individualized access — `GET /v1/responses/:id`, `GET /:id/input_items`, `POST /:id/cancel`, `DELETE /:id`, and `previous_response_id` chaining in `POST /v1/responses` — verifies ownership on the server before operating. Unknown, foreign, and owner-less (legacy) resources all return the same `404 Response not found` payload, so knowing a Response ID reveals nothing about existence or ownership. Client-supplied affinity headers are no longer forwarded raw: the effective provider session key is a SHA-256 digest binding the principal and the affinity value, so one consumer cannot resume another consumer's Cursor agent by submitting a matching affinity ID, while the same consumer retains continuity for legitimate chaining and reuse.
+
+**Offline evidence:** `tests/session-isolation.test.ts` creates two authenticated consumers with distinct gateway credentials and verifies ownership stamping, owner access, and identical not-found bodies for foreign and unknown IDs across read, input items, cancel, and delete; chaining onto a foreign `previous_response_id` returns the identical 404 before any provider execution; equal affinity IDs across consumers map to distinct provider session keys while the same consumer's affinity is stable; legacy owner-less responses are inaccessible to both consumers and to trusted loopback mode; unauthenticated and invalid-token requests remain rejected as in Phase 1. `tests/env.test.ts` covers multi-credential parsing, list deduplication, and reuse rejection. The offline suite (both live-provider integration files excluded) passed with 28 test files and 259 tests at the time of the Phase 4 review. No live Cursor call was made.
 
 ### AUD-06 — Exported image engine can fetch arbitrary HTTP(S) URLs
 

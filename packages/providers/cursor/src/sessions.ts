@@ -10,15 +10,23 @@ interface SessionRecord {
   touchedAt: number;
 }
 
+export interface CursorSessionManagerOptions {
+  maxSessions?: number;
+  ttlMs?: number;
+}
+
 export class CursorSessionManager {
   private readonly sessions = new Map<string, SessionRecord>();
   private readonly maxSessions: number;
+  private readonly ttlMs: number;
+  private removedByTtl = 0;
 
   constructor(
     private readonly client: CursorClient,
-    options: { maxSessions?: number } = {},
+    options: CursorSessionManagerOptions = {},
   ) {
     this.maxSessions = options.maxSessions ?? 128;
+    this.ttlMs = options.ttlMs ?? 24 * 60 * 60 * 1000;
   }
 
   async acquireAgent(
@@ -53,6 +61,32 @@ export class CursorSessionManager {
 
   getRemoteAgentId(sessionId: string): string | undefined {
     return this.sessions.get(sessionId)?.agentId;
+  }
+
+  cleanupInactive(now: number, isProtected: (sessionId: string) => boolean): number {
+    let removed = 0;
+    for (const [sessionId, record] of this.sessions) {
+      if (isProtected(sessionId)) continue;
+      if (now - record.touchedAt <= this.ttlMs) continue;
+      this.sessions.delete(sessionId);
+      removed += 1;
+      this.removedByTtl += 1;
+    }
+    return removed;
+  }
+
+  stats(): {
+    storedSessions: number;
+    maxSessions: number;
+    ttlMs: number;
+    removedByTtl: number;
+  } {
+    return {
+      storedSessions: this.sessions.size,
+      maxSessions: this.maxSessions,
+      ttlMs: this.ttlMs,
+      removedByTtl: this.removedByTtl,
+    };
   }
 
   private evictOverflow(): void {

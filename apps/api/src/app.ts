@@ -14,8 +14,10 @@ import { getLogger } from "./utils/logger.js";
 import { createErrorHandler } from "./utils/error-handler.js";
 
 export function buildApp(
-  config: Pick<Env, "HOST" | "GATEWAY_API_TOKEN"> &
-    Partial<Pick<Env, "CORS_ORIGINS">> = loadEnv(),
+  config: Pick<Env, "HOST"> &
+    Partial<
+      Pick<Env, "GATEWAY_API_TOKEN" | "GATEWAY_API_TOKENS" | "CORS_ORIGINS">
+    > = loadEnv(),
 ): Express {
   const app = express();
 

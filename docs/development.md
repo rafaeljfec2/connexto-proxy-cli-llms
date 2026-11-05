@@ -13,6 +13,8 @@ pnpm monorepo (`pnpm-workspace.yaml`):
 
 Root `package.json` holds shared devDependencies (Vitest, ESLint, Prettier, Supertest) and orchestration scripts.
 
+For recoverable feature delivery (demands, review gate, AI Memory), see [connexto-workflow.md](connexto-workflow.md).
+
 ## First-time setup
 
 ```bash

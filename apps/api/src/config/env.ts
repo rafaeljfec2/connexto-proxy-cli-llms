@@ -29,12 +29,32 @@ const envSchema = z
       .trim()
       .optional()
       .transform((token) => token || undefined),
+    GATEWAY_API_TOKENS: z
+      .string()
+      .optional()
+      .transform((raw) => {
+        const tokens = [
+          ...new Set(
+            raw
+              ?.split(",")
+              .map((token) => token.trim())
+              .filter((token) => token.length > 0),
+          ),
+        ];
+        return tokens.length > 0 ? tokens : undefined;
+      }),
     CORS_ORIGINS: z.string().optional().transform(parseCorsOrigins),
     LOG_FORMAT: logFormatSchema.default("json"),
     LOG_LEVEL: logLevelSchema.default("info"),
+    RESPONSE_TTL_MS: z.coerce.number().int().positive().default(3_600_000),
+    RESPONSE_MAX_ENTRIES: z.coerce.number().int().positive().default(512),
+    SESSION_TTL_MS: z.coerce.number().int().positive().default(86_400_000),
+    LIFECYCLE_CLEANUP_INTERVAL_MS: z.coerce.number().int().positive().default(60_000),
   })
   .superRefine((env, context) => {
-    if (!isLoopbackHost(env.HOST) && env.GATEWAY_API_TOKEN === undefined) {
+    const hasPrimaryToken = env.GATEWAY_API_TOKEN !== undefined;
+    const hasSecondaryTokens = (env.GATEWAY_API_TOKENS?.length ?? 0) > 0;
+    if (!isLoopbackHost(env.HOST) && !hasPrimaryToken && !hasSecondaryTokens) {
       context.addIssue({
         code: "custom",
         path: ["GATEWAY_API_TOKEN"],
@@ -80,6 +100,21 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
     secureTokenEquals(env.GATEWAY_API_TOKEN, cursorApiKey)
   ) {
     throw new Error("GATEWAY_API_TOKEN must be different from CURSOR_API_KEY");
+  }
+
+  const secondaryTokens = env.GATEWAY_API_TOKENS ?? [];
+  if (
+    cursorApiKey &&
+    secondaryTokens.some((token) => secureTokenEquals(token, cursorApiKey))
+  ) {
+    throw new Error("GATEWAY_API_TOKENS must be different from CURSOR_API_KEY");
+  }
+
+  if (
+    env.GATEWAY_API_TOKEN !== undefined &&
+    secondaryTokens.includes(env.GATEWAY_API_TOKEN)
+  ) {
+    throw new Error("GATEWAY_API_TOKENS must be different from GATEWAY_API_TOKEN");
   }
 
   return env;

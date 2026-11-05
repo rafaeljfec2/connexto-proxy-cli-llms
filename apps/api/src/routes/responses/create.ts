@@ -16,6 +16,7 @@ import {
 } from "@agent-runtime-gateway/compatibility-openai";
 import { getGatewayServices } from "../../services/gateway.js";
 import { resolveRequestApiKey } from "../../utils/auth.js";
+import { findOwnedResponse, resolveRequestPrincipal } from "../../utils/identity.js";
 import { resolveSessionAffinity } from "../../utils/session.js";
 import { initSseHeaders } from "../../utils/sse.js";
 import { getLogger } from "../../utils/logger.js";
@@ -29,8 +30,17 @@ export async function handleCreateResponse(req: Request, res: Response): Promise
       ? res.locals.requestId
       : crypto.randomUUID();
   const cancellation = createRequestCancellation(req, res);
+  let responseId: string | undefined;
 
   try {
+    const principal = resolveRequestPrincipal(res.locals);
+    if (principal === undefined) {
+      res
+        .status(401)
+        .json(openAiErrorPayload("Missing or invalid gateway API key", "unauthorized"));
+      return;
+    }
+
     const body = req.body as Record<string, unknown>;
     const requestedModel =
       typeof body?.model === "string" ? body.model : "composer-2.5";
@@ -41,8 +51,10 @@ export async function handleCreateResponse(req: Request, res: Response): Promise
         ? body.previous_response_id
         : undefined;
 
+    // The previous Response must belong to the authenticated principal;
+    // foreign and owner-less resources are indistinguishable from unknown.
     const previousState = previousResponseId
-      ? services.responseStore.get(previousResponseId)
+      ? findOwnedResponse(services.responseStore, previousResponseId, principal)
       : undefined;
     if (previousResponseId && !previousState) {
       res.status(404).json(openAiErrorPayload("Response not found", "not_found"));
@@ -75,10 +87,13 @@ export async function handleCreateResponse(req: Request, res: Response): Promise
     }
 
     const id = `resp_${crypto.randomUUID().replaceAll("-", "")}`;
+    responseId = id;
     const created = Math.floor(Date.now() / 1000);
+    services.responseStore.pinActive(id);
     const sessionAffinity = resolveSessionAffinity(
       req,
       id,
+      principal,
       previousState?.sdkSessionKey,
     );
 
@@ -159,6 +174,7 @@ export async function handleCreateResponse(req: Request, res: Response): Promise
           model: prepared.model,
           inputItems: prepared.responseInputItems ?? [],
           sdkSessionKey: sessionAffinity,
+          ownerPrincipal: principal,
           responseData: responseObject({
             id,
             created,
@@ -216,6 +232,7 @@ export async function handleCreateResponse(req: Request, res: Response): Promise
         model: prepared.model,
         inputItems: prepared.responseInputItems ?? [],
         sdkSessionKey: sessionAffinity,
+        ownerPrincipal: principal,
         responseData: resp,
       });
     }
@@ -225,6 +242,9 @@ export async function handleCreateResponse(req: Request, res: Response): Promise
     if (cancellation.signal.aborted || res.destroyed) return;
     sendHttpError(error, req, res);
   } finally {
+    if (responseId !== undefined) {
+      services.responseStore.unpinActive(responseId);
+    }
     cancellation.dispose();
   }
 }

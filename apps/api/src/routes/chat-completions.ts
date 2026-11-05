@@ -14,6 +14,7 @@ import {
 } from "@agent-runtime-gateway/compatibility-openai";
 import { getGatewayServices } from "../services/gateway.js";
 import { resolveRequestApiKey } from "../utils/auth.js";
+import { resolveRequestPrincipal } from "../utils/identity.js";
 import { resolveSessionAffinity } from "../utils/session.js";
 import { initSseHeaders } from "../utils/sse.js";
 import { getLogger } from "../utils/logger.js";
@@ -64,9 +65,19 @@ export function registerChatCompletionRoutes(app: Express): void {
           return;
         }
 
+        const principal = resolveRequestPrincipal(res.locals);
+        if (principal === undefined) {
+          res
+            .status(401)
+            .json(
+              openAiErrorPayload("Missing or invalid gateway API key", "unauthorized"),
+            );
+          return;
+        }
+
         const id = `chatcmpl_${crypto.randomUUID().replaceAll("-", "")}`;
         const created = Math.floor(Date.now() / 1000);
-        const sessionAffinity = resolveSessionAffinity(req, id);
+        const sessionAffinity = resolveSessionAffinity(req, id, principal);
 
         const services = getGatewayServices();
         const providerStart = performance.now();

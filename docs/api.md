@@ -28,13 +28,23 @@ When gateway authentication is enabled, the public endpoints are explicitly limi
 
 All other routes listed below require gateway authentication when a gateway token is configured. In loopback-only mode without a gateway token, the listener is the trust boundary and existing local clients remain unauthenticated. `CURSOR_API_KEY` remains an optional provider fallback and never substitutes for the gateway token.
 
+### Consumer identities and resource ownership
+
+Each gateway credential represents an independent consumer. `GATEWAY_API_TOKEN` remains the primary credential; `GATEWAY_API_TOKENS` accepts a comma-separated list of additional credentials (deduplicated at load time, none may equal `GATEWAY_API_TOKEN` or `CURSOR_API_KEY`). Every credential maps to an internal principal derived as a one-way SHA-256 digest — the raw token is never stored, logged, or exposed, and principal identifiers never appear in responses or logs. In loopback-only mode without tokens, all local requests share the single trusted local principal.
+
+Stored Responses belong to the principal that created them, and that association is stamped server-side at creation; client input cannot change or choose it. Every individualized operation — reading a Response, reading its input items, cancelling or deleting it, and chaining onto `previous_response_id` — requires ownership. Resources with an unknown ID, owned by a different consumer, or without a recorded owner (legacy entries) respond identically with `404 {"error":{"message":"Response not found","code":"not_found"}}`; knowing or guessing a Response ID reveals nothing about existence or ownership.
+
+### Session affinity
+
+Consumers may attach continuity to provider execution with the `x-session-affinity` (or legacy `x-opencode-session`) header. The value is never used raw: the gateway binds it to the authenticated principal via a one-way digest, so consumers cannot collide on a provider session or resume another consumer's agent by submitting the same affinity value. When a request carries both an affinity header and `previous_response_id`, the affinity header takes precedence over the chained session key (pre-Phase-4 priority order preserved). Requests without an affinity header continue a chained `previous_response_id` with its original session key, and fresh executions without either input receive a new server-generated session.
+
 ## Meta & health
 
-| Method | Path      | Gateway auth | Description                                                        |
-| ------ | --------- | ------------ | ------------------------------------------------------------------ |
-| `GET`  | `/health` | No           | Liveness: `{ "status": "ok", "service": "agent-runtime-gateway" }` |
-| `GET`  | `/`       | No           | Service metadata and model id list                                 |
-| `GET`  | `/v1`     | No           | Same as `/`                                                        |
+| Method | Path      | Gateway auth | Description                                                                                                                                     |
+| ------ | --------- | ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET`  | `/health` | No           | Liveness plus local runtime counters (stored Responses/sessions, active executions, process memory). No response bodies or secrets are exposed. |
+| `GET`  | `/`       | No           | Service metadata and model id list                                                                                                              |
+| `GET`  | `/v1`     | No           | Same as `/`                                                                                                                                     |
 
 ## Models
 
@@ -85,7 +95,7 @@ Registered under `apps/api/src/routes/responses.ts`:
 | `POST`   | `/v1/responses/:id/cancel`      | **Yes**      | Cancel a background Response     |
 | `DELETE` | `/v1/responses/:id`             | **Yes**      | Delete stored response           |
 
-In-memory response storage is provided by `ResponseSessionStore` in the compatibility package (bounded LRU).
+In-memory response storage is provided by `ResponseSessionStore` in the compatibility package (TTL plus bounded capacity with active-run protection).
 
 OpenAI's cancel endpoint applies only to Responses created with `background: true`. This gateway currently rejects background Responses, so explicit Response cancellation is unavailable. A client disconnect still cancels the provider execution associated with that HTTP request.
 

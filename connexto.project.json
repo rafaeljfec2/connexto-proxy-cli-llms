@@ -1,0 +1,40 @@
+{
+  "project": {
+    "name": "connexto-proxy-cli-llms",
+    "language": "typescript",
+    "framework": "node"
+  },
+  "commands": {
+    "install": "pnpm install",
+    "test": "pnpm test",
+    "lint": "pnpm lint",
+    "typecheck": "pnpm typecheck",
+    "build": "pnpm build",
+    "implement": null
+  },
+  "quality": {
+    "require_tests": true,
+    "require_lint": true,
+    "require_typecheck": true,
+    "require_build": false,
+    "max_validate_attempts": 3,
+    "command_timeout_seconds": 600
+  },
+  "git": {
+    "base_branch": "main",
+    "isolated_branch": true,
+    "allow_commit": false
+  },
+  "memory": {
+    "enabled": true,
+    "workspace": "rafael",
+    "project": "connexto-proxy-cli-llms"
+  },
+  "workflow": {
+    "max_review_rounds": 3,
+    "developer_command": null,
+    "judge_command": null,
+    "memory_write_command": null,
+    "memory_read_command": null
+  }
+}

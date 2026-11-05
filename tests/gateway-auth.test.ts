@@ -9,6 +9,10 @@ import {
   createStubProvider,
 } from "../packages/core/tests/helpers/stub-provider.js";
 import { secureTokenEquals } from "../apps/api/src/utils/secure-token.js";
+import {
+  LOCAL_PRINCIPAL,
+  principalFromCredential,
+} from "../apps/api/src/utils/identity.js";
 
 const gatewayToken = "synthetic-gateway-token-123";
 const responseId = "resp_gateway_auth_test";
@@ -87,6 +91,7 @@ describe("gateway authentication", () => {
       model: "composer-2.5",
       inputItems: [{ role: "user", content: "synthetic local input" }],
       responseData: { id: responseId, output: ["synthetic local output"] },
+      ownerPrincipal: LOCAL_PRINCIPAL,
     });
 
     try {
@@ -108,6 +113,7 @@ describe("gateway authentication", () => {
       model: "composer-2.5",
       inputItems: [{ role: "user", content: "synthetic private input" }],
       responseData: { id: responseId, output: ["synthetic private output"] },
+      ownerPrincipal: principalFromCredential(gatewayToken),
     });
 
     try {

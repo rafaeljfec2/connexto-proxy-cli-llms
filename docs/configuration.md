@@ -16,14 +16,19 @@ On startup, `apps/api/src/server.ts`:
 
 Validated by `loadEnv()`:
 
-| Variable            | Default     | Description                                                                            |
-| ------------------- | ----------- | -------------------------------------------------------------------------------------- |
-| `HOST`              | `127.0.0.1` | Bind address. Use loopback unless you understand exposure risks.                       |
-| `PORT`              | `3000`      | TCP port.                                                                              |
-| `GATEWAY_API_TOKEN` | unset       | Gateway credential. Required for non-loopback binding; optional in loopback-only mode. |
-| `CORS_ORIGINS`      | unset       | Comma-separated browser origins. Invalid values and wildcards fail startup.            |
-| `LOG_FORMAT`        | `json`      | `json` (NDJSON) or `pretty` (colorized terminal via `pino-pretty`).                    |
-| `LOG_LEVEL`         | `info`      | `fatal` \| `error` \| `warn` \| `info` \| `debug` \| `trace` \| `silent`.              |
+| Variable                        | Default     | Description                                                                                                                                                                                                                                          |
+| ------------------------------- | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `HOST`                          | `127.0.0.1` | Bind address. Use loopback unless you understand exposure risks.                                                                                                                                                                                     |
+| `PORT`                          | `3000`      | TCP port.                                                                                                                                                                                                                                            |
+| `GATEWAY_API_TOKEN`             | unset       | Primary gateway credential. Required for non-loopback binding (unless `GATEWAY_API_TOKENS` is set); optional in loopback-only mode. Each distinct credential receives its own consumer identity with isolated stored Responses and session affinity. |
+| `GATEWAY_API_TOKENS`            | unset       | Optional comma-separated list of additional gateway credentials (independent consumer identities). Repeated entries are deduplicated at startup. A value equal to `GATEWAY_API_TOKEN` or `CURSOR_API_KEY` fails startup.                             |
+| `CORS_ORIGINS`                  | unset       | Comma-separated browser origins. Invalid values and wildcards fail startup.                                                                                                                                                                          |
+| `LOG_FORMAT`                    | `json`      | `json` (NDJSON) or `pretty` (colorized terminal via `pino-pretty`).                                                                                                                                                                                  |
+| `LOG_LEVEL`                     | `info`      | `fatal` \| `error` \| `warn` \| `info` \| `debug` \| `trace` \| `silent`.                                                                                                                                                                            |
+| `RESPONSE_TTL_MS`               | `3600000`   | TTL for terminal stored Responses (1 hour). In-flight Responses are pinned until the HTTP handler finishes.                                                                                                                                          |
+| `RESPONSE_MAX_ENTRIES`          | `512`       | Maximum stored Responses kept in memory. Active pins and running handlers are never evicted.                                                                                                                                                         |
+| `SESSION_TTL_MS`                | `86400000`  | TTL for inactive Cursor session affinity records (24 hours). Sessions referenced by active executions are skipped.                                                                                                                                   |
+| `LIFECYCLE_CLEANUP_INTERVAL_MS` | `60000`     | Interval for the in-process cleanup timer (1 minute). Uses `setInterval` with `unref()` so it does not keep the process alive alone.                                                                                                                 |
 
 ### Local development example
 

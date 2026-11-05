@@ -1,5 +1,6 @@
 import { buildApp } from "./app.js";
 import { loadEnv, loadEnvFileIfPresent } from "./config/env.js";
+import { initializeGatewayServices } from "./services/gateway.js";
 import { createLogger, setLogger } from "./utils/logger.js";
 
 function main(): void {
@@ -10,6 +11,9 @@ function main(): void {
     level: env.LOG_LEVEL,
   });
   setLogger(logger);
+
+  const services = initializeGatewayServices(env);
+  services.lifecycle.start();
 
   const app = buildApp(env);
 
@@ -27,6 +31,7 @@ function main(): void {
 
   const shutdown = (signal: string): void => {
     logger.info({ signal }, `Received ${signal}, shutting down gracefully...`);
+    services.lifecycle.stop();
     server.close((err) => {
       if (err) {
         logger.error({ err: err.message }, "Error during shutdown");
