@@ -125,7 +125,42 @@ describe("Gateway Logging and Request Correlation", () => {
     expect(summaryLog?.route).not.toContain("foo=");
   });
 
-  it("logs provider execution duration and SSE first delta timing without leaking prompts or secrets", async () => {
+  it("logs inbound and outbound HTTP payloads while redacting credentials", async () => {
+    const { logs, stream } = createLogCapture();
+    const logger = createLogger({ destination: stream, level: "info" });
+    setLogger(logger);
+
+    const app = buildApp();
+    const secretApiKey = "secret-cursor-api-key-99999";
+    const userMessage = "Super confidential user prompt text";
+
+    const res = await request(app)
+      .post("/v1/chat/completions")
+      .set("Authorization", `Bearer ${secretApiKey}`)
+      .send({
+        model: "composer-2.5",
+        messages: [{ role: "user", content: userMessage }],
+        stream: false,
+      });
+
+    expect(res.status).toBe(200);
+
+    const inbound = logs.find(
+      (entry) => entry.msg === "http payload" && entry.direction === "inbound",
+    );
+    const outbound = logs.find(
+      (entry) => entry.msg === "http payload" && entry.direction === "outbound",
+    );
+    expect(inbound).toBeDefined();
+    expect(outbound).toBeDefined();
+
+    const stringifiedLogs = JSON.stringify(logs);
+    expect(stringifiedLogs).not.toContain(secretApiKey);
+    expect(stringifiedLogs).not.toContain("Bearer");
+    expect(stringifiedLogs).toContain(userMessage);
+  });
+
+  it("logs provider execution duration and SSE first delta timing without leaking auth tokens", async () => {
     const { logs, stream } = createLogCapture();
     const logger = createLogger({ destination: stream, level: "info" });
     setLogger(logger);
@@ -157,11 +192,10 @@ describe("Gateway Logging and Request Correlation", () => {
     expect(typeof providerLog?.durationMs).toBe("number");
     expect(typeof providerLog?.timeToFirstDeltaMs).toBe("number");
 
-    // Negative validation: assert logs never contain secrets, auth tokens, prompts, or response text
     const stringifiedLogs = JSON.stringify(logs);
     expect(stringifiedLogs).not.toContain(secretApiKey);
-    expect(stringifiedLogs).not.toContain(secretPrompt);
     expect(stringifiedLogs).not.toContain("Bearer");
+    expect(stringifiedLogs).toContain(secretPrompt);
   });
 
   it("logs non-streaming provider execution and request completion", async () => {

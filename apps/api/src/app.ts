@@ -13,11 +13,19 @@ import { createGatewayAuthMiddleware } from "./utils/gateway-auth.js";
 import { createCorsMiddleware } from "./utils/cors.js";
 import { getLogger } from "./utils/logger.js";
 import { createErrorHandler } from "./utils/error-handler.js";
+import { createHttpPayloadLoggingMiddleware } from "./middleware/http-payload-logging.js";
 
 export function buildApp(
   config: Pick<Env, "HOST"> &
     Partial<
-      Pick<Env, "GATEWAY_API_TOKEN" | "GATEWAY_API_TOKENS" | "CORS_ORIGINS">
+      Pick<
+        Env,
+        | "GATEWAY_API_TOKEN"
+        | "GATEWAY_API_TOKENS"
+        | "CORS_ORIGINS"
+        | "LOG_HTTP_PAYLOADS"
+        | "LOG_HTTP_PAYLOAD_MAX_BYTES"
+      >
     > = loadEnv(),
 ): Express {
   const app = express();
@@ -71,6 +79,7 @@ export function buildApp(
 
   app.use(createGatewayAuthMiddleware(config));
   app.use(express.json());
+  app.use(createHttpPayloadLoggingMiddleware(config));
 
   registerMetaRoutes(app);
   registerHealthRoutes(app);

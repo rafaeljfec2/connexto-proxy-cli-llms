@@ -46,6 +46,19 @@ const envSchema = z
     CORS_ORIGINS: z.string().optional().transform(parseCorsOrigins),
     LOG_FORMAT: logFormatSchema.default("json"),
     LOG_LEVEL: logLevelSchema.default("info"),
+    LOG_HTTP_PAYLOADS: z
+      .union([z.boolean(), z.enum(["true", "false", "1", "0"])])
+      .optional()
+      .transform((value) => {
+        if (value === undefined) return true;
+        if (typeof value === "boolean") return value;
+        return value !== "false" && value !== "0";
+      }),
+    LOG_HTTP_PAYLOAD_MAX_BYTES: z.coerce
+      .number()
+      .int()
+      .positive()
+      .default(262_144),
     RESPONSE_TTL_MS: z.coerce.number().int().positive().default(3_600_000),
     RESPONSE_MAX_ENTRIES: z.coerce.number().int().positive().default(512),
     SESSION_TTL_MS: z.coerce.number().int().positive().default(86_400_000),

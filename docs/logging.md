@@ -12,6 +12,8 @@ The logger is configured via environment variables loaded on server startup:
 | ------------ | ------------------------------------------------------------------------ | ------- | ------------------------------------------------------------------------------------------------------------------- |
 | `LOG_FORMAT` | `json` \| `pretty`                                                       | `json`  | Log output format. `json` outputs NDJSON; `pretty` uses `pino-pretty` for human-readable colorized terminal output. |
 | `LOG_LEVEL`  | `fatal` \| `error` \| `warn` \| `info` \| `debug` \| `trace` \| `silent` | `info`  | Minimum log severity to emit.                                                                                       |
+| `LOG_HTTP_PAYLOADS` | `true` \| `false` \| `1` \| `0`                                   | `true`  | When enabled, logs structured inbound/outbound HTTP bodies (see below).                                              |
+| `LOG_HTTP_PAYLOAD_MAX_BYTES` | positive integer                                          | `262144` | Maximum UTF-8 byte length per logged body; larger payloads are truncated with metadata.                    |
 
 ### Switching Between JSON and Pretty Output
 
@@ -56,7 +58,46 @@ Emitted on `res.finish` / `res.close`:
 - `route`: Normalized route path (e.g. `/v1/models/:model`), preventing leakage of dynamic path parameters or query strings.
 - `durationMs`: Total request turnaround time in milliseconds.
 
-### 2. Provider Execution Summary
+### 2. HTTP Request and Response Payloads
+
+When `LOG_HTTP_PAYLOADS` is enabled (default), the gateway emits two additional `info` records per request (after `express.json()` parsing for inbound bodies):
+
+**Inbound (`direction: "inbound"`):**
+
+```json
+{
+  "level": 30,
+  "requestId": "981fbd28-599c-4743-92b6-62619b578b08",
+  "direction": "inbound",
+  "method": "POST",
+  "path": "/v1/chat/completions",
+  "headers": { "content-type": "application/json", "authorization": "[REDACTED]" },
+  "query": {},
+  "body": { "model": "composer-2.5", "messages": [{ "role": "user", "content": "hello" }] },
+  "msg": "http payload"
+}
+```
+
+**Outbound (`direction: "outbound"`)** on `res.finish` / `res.close`:
+
+```json
+{
+  "level": 30,
+  "requestId": "981fbd28-599c-4743-92b6-62619b578b08",
+  "direction": "outbound",
+  "status": 200,
+  "body": { "id": "chatcmpl_…", "object": "chat.completion", "choices": [] },
+  "msg": "http payload"
+}
+```
+
+- JSON responses captured via `res.json` / `res.send` are logged as parsed objects.
+- `text/event-stream` responses aggregate parsed `data:` JSON lines (plus `[DONE]` markers).
+- Oversized bodies include `__truncated`, `byteLength`, and a `preview` string.
+
+Routes registered before the JSON parser (for example Swagger static assets) do not receive inbound body logging.
+
+### 3. Provider Execution Summary
 
 Emitted when the provider execution completes:
 
@@ -95,10 +136,13 @@ Emitted when the provider execution completes:
 
 ## Data Redaction & Security Invariants
 
-In accordance with security requirements:
+HTTP payload logging **includes** request and response JSON bodies (including prompts and model output) because operators requested full payload visibility. Credential-shaped values are still redacted:
 
-- No prompt messages or user text.
-- No model output or assistant text.
-- No API keys, Bearer tokens, or credentials.
-- No tool execution content or raw function call arguments.
-- Error entries contain only safe classifications (`errorType`, `errorCode`, safe message).
+- Request headers: `Authorization`, `Cookie`, `Set-Cookie`, `x-api-key`, `X-Gateway-API-Key`, and similar.
+- JSON fields whose names match credential patterns (`api_key`, `access_token`, `password`, `secret`, `token`, etc.) are replaced with `[REDACTED]`.
+
+Provider summary logs remain metadata-only (durations, model id, status) and do not duplicate full prompts.
+
+Disable payload logging in sensitive deployments with `LOG_HTTP_PAYLOADS=false`.
+
+Error entries contain only safe classifications (`errorType`, `errorCode`, safe message).

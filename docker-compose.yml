@@ -1,0 +1,23 @@
+services:
+  gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        NODE_VERSION: "24.22.1"
+    image: agent-runtime-gateway:local
+    ports:
+      - 9090:3000
+    env_file:
+      - path: .env
+        required: true
+    environment:
+      HOST: 0.0.0.0
+      NODE_ENV: production
+      LOG_FORMAT: json
+      LOG_LEVEL: info
+      # Local Docker default when .env leaves GATEWAY_API_TOKEN empty. Override in .env for real deployments.
+      GATEWAY_API_TOKEN: ${GATEWAY_API_TOKEN:-docker-local-gateway-dev}
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true

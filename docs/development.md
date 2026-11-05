@@ -108,9 +108,11 @@ Delivery evidence: [reports/](reports/).
 
 - **pnpm 11** may require approved build scripts for `esbuild` — see `pnpm-workspace.yaml` (`allowBuilds`).
 - TypeScript: `module` / `moduleResolution` **NodeNext**; use `.js` extensions in relative imports inside packages.
+- Docker production images use `LOG_FORMAT=json` by default; `pino-pretty` is only loaded when `LOG_FORMAT=pretty` (dev dependency).
 
 ## See also
 
+- [docker.md](docker.md)
 - [configuration.md](configuration.md)
 - [testing.md](testing.md)
 - [api.md](api.md)

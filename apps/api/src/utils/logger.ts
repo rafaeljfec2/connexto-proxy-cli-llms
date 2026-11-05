@@ -1,7 +1,9 @@
+import { createRequire } from "node:module";
 import process from "node:process";
 import pino, { type DestinationStream, type Logger, type LoggerOptions } from "pino";
-import pretty from "pino-pretty";
 import { loadEnv, type LogFormat, type LogLevel } from "../config/env.js";
+
+const require = createRequire(import.meta.url);
 
 export interface LoggerConfig {
   readonly format?: LogFormat;
@@ -45,6 +47,7 @@ export function createLogger(config: LoggerConfig = {}): Logger {
   }
 
   if (format === "pretty") {
+    const pretty = require("pino-pretty") as typeof import("pino-pretty").default;
     const prettyStream = pretty({
       colorize: true,
       translateTime: "SYS:standard",
