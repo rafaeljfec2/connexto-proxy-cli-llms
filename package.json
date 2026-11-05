@@ -3,6 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "build": "pnpm -r run build",
     "dev": "pnpm --filter @agent-runtime-gateway/api dev",
     "start": "pnpm --filter @agent-runtime-gateway/api start",
     "test": "vitest run",

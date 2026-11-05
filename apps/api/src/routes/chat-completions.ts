@@ -1,3 +1,4 @@
+import { collectRunText } from "../utils/run.js";
 import crypto from "node:crypto";
 import type { Express, Request, Response } from "express";
 import {
@@ -12,6 +13,8 @@ import {
 } from "@agent-runtime-gateway/compatibility-openai";
 import { getGatewayServices } from "../services/gateway.js";
 import { resolveRequestApiKey } from "../utils/auth.js";
+import { resolveSessionAffinity } from "../utils/session.js";
+import { initSseHeaders } from "../utils/sse.js";
 
 export function registerChatCompletionRoutes(app: Express): void {
   app.post(
@@ -55,10 +58,7 @@ export function registerChatCompletionRoutes(app: Express): void {
 
         const id = `chatcmpl_${crypto.randomUUID().replaceAll("-", "")}`;
         const created = Math.floor(Date.now() / 1000);
-        const sessionAffinity =
-          (req.headers["x-session-affinity"] as string | undefined) ??
-          (req.headers["x-opencode-session"] as string | undefined) ??
-          id;
+        const sessionAffinity = resolveSessionAffinity(req, id);
 
         const services = getGatewayServices();
         const run = await services.executor.execute("cursor", {
@@ -69,10 +69,7 @@ export function registerChatCompletionRoutes(app: Express): void {
         });
 
         if (prepared.stream) {
-          res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
-          res.setHeader("Cache-Control", "no-cache, no-transform");
-          res.setHeader("Connection", "keep-alive");
-          res.setHeader("X-Accel-Buffering", "no");
+          initSseHeaders(res);
 
           res.write(
             chatChunk({ id, created, model: prepared.model, role: "assistant" }),
@@ -115,25 +112,8 @@ export function registerChatCompletionRoutes(app: Express): void {
           return;
         }
 
-        let fullText = "";
-        for await (const event of run.events) {
-          if (event.type === "message.delta" && event.delta) {
-            fullText += event.delta;
-          }
-        }
-
-        const result = await run.wait();
-        if (result.status === "failed") {
-          res
-            .status(502)
-            .json(
-              openAiErrorPayload(
-                result.error?.message ?? "Execution failed",
-                "upstream_error",
-              ),
-            );
-          return;
-        }
+        const fullText = await collectRunText(run, res);
+        if (fullText === null) return;
 
         const response = chatCompletionResponse({
           id,

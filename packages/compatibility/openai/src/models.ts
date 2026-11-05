@@ -1,3 +1,4 @@
+import { estimateTokens } from "./protocol/common.js";
 export interface ComposerModel {
   id: string;
   name: string;
@@ -98,8 +99,8 @@ export function textCompletionResponse(input: {
   promptChars: number;
   cursorRunId?: string;
 }): Record<string, unknown> {
-  const promptTokens = Math.max(0, Math.ceil(input.promptChars / 4));
-  const completionTokens = Math.max(0, Math.ceil(input.text.length / 4));
+  const promptTokens = estimateTokens(input.promptChars);
+  const completionTokens = estimateTokens(input.text.length);
   return {
     id: input.id,
     object: "text_completion",
