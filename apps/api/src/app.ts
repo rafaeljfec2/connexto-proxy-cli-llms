@@ -11,6 +11,7 @@ import { loadEnv, type Env } from "./config/env.js";
 import { createGatewayAuthMiddleware } from "./utils/gateway-auth.js";
 import { createCorsMiddleware } from "./utils/cors.js";
 import { getLogger } from "./utils/logger.js";
+import { createErrorHandler } from "./utils/error-handler.js";
 
 export function buildApp(
   config: Pick<Env, "HOST" | "GATEWAY_API_TOKEN"> &
@@ -72,6 +73,7 @@ export function buildApp(
   registerChatCompletionRoutes(app);
   registerCompletionRoutes(app);
   registerResponseRoutes(app);
+  app.use(createErrorHandler());
 
   return app;
 }

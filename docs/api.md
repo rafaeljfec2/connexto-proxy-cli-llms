@@ -82,10 +82,12 @@ Registered under `apps/api/src/routes/responses.ts`:
 | `POST`   | `/v1/responses/compact`         | **Yes**      | Compact transcript helper        |
 | `GET`    | `/v1/responses/:id`             | **Yes**      | Fetch stored response            |
 | `GET`    | `/v1/responses/:id/input_items` | **Yes**      | Input items for a response       |
-| `POST`   | `/v1/responses/:id/cancel`      | **Yes**      | Cancel in-flight response        |
+| `POST`   | `/v1/responses/:id/cancel`      | **Yes**      | Cancel a background Response     |
 | `DELETE` | `/v1/responses/:id`             | **Yes**      | Delete stored response           |
 
 In-memory response storage is provided by `ResponseSessionStore` in the compatibility package (bounded LRU).
+
+OpenAI's cancel endpoint applies only to Responses created with `background: true`. This gateway currently rejects background Responses, so explicit Response cancellation is unavailable. A client disconnect still cancels the provider execution associated with that HTTP request.
 
 ## CORS & preflight
 

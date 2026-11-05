@@ -86,20 +86,24 @@ The Responses GET, input-items, and DELETE handlers also access the global respo
 ### AUD-03 — Client disconnects do not cancel provider streams
 
 **Severity:** MEDIUM  
-**Status:** Confirmed with a local mock provider  
-**Files:** `apps/api/src/routes/chat-completions.ts:68-99`, `apps/api/src/routes/completions.ts:59-95`, `apps/api/src/routes/responses/create.ts:78-118`, `packages/core/src/contracts/execution.ts:3-10`, `packages/providers/cursor/src/provider.ts:149-160`
+**Status:** Local cancellation implemented and tested; remote termination is unverified
+**Files:** `apps/api/src/utils/request-cancellation.ts`, `apps/api/src/utils/run.ts`, provider-backed routes, `packages/core/src/contracts/execution.ts`, `packages/providers/cursor/src/provider.ts`
 
-The runtime contract supports an `AbortSignal`, and the Cursor provider cancels its run when that signal aborts. The HTTP routes do not create or pass a signal and do not stop consuming the event stream when the response closes. The request summary's `close` listener only logs completion.
+Before remediation, the runtime contract supported an `AbortSignal` and the Cursor provider called its SDK cancellation method when the signal aborted, but HTTP routes did not create or pass a signal and continued consuming events after the response closed. The request summary's `close` listener only logged completion.
 
-**Reproduction:** A local HTTP client disconnected after the first SSE bytes while a mocked provider yielded three deltas. All three provider events were still produced and `run.cancel()` was not called. No external provider was used.
+**Original reproduction:** A local HTTP client disconnected after the first SSE bytes while a mocked provider yielded three deltas. All three provider events were still produced and `run.cancel()` was not called. No external provider was used.
 
 **Impact:** Disconnected clients can leave provider work running and consume quota, connections, and process resources. Repeated requests can amplify this availability and cost impact.
 
 **Probability:** Medium for clients or intermediaries that commonly cancel or time out streaming requests.
 
-**Recommendation:** Create an `AbortController` per request, pass its signal to `executor.execute`, and abort when the response closes before normal completion. Stop writing and draining events after cancellation and ensure the provider run is cancelled once.
+**Remediation:** Each provider-backed HTTP route creates a request-scoped controller, passes its signal to `executor.execute`, and aborts on `req.aborted` or a response `close` before normal completion. Streaming routes stop forwarding events after abort; non-streaming collection returns quietly when the HTTP signal is aborted. A provider-reported cancelled run without an HTTP disconnect ends with a safe upstream error instead of leaving the connection open. CursorProvider deduplicates SDK cancellation and removes its abort listener when the run settles. An already-aborted signal also prevents a pending session acquisition from starting `agent.send()`.
 
-**Correction test:** Disconnect a mocked SSE client after its first delta. Assert the provider is cancelled once, no later deltas are consumed, and concurrent requests remain unaffected.
+**Offline evidence:** `tests/stream-cancellation.test.ts` and `tests/stream-cancellation-routes.test.ts` use loopback HTTP clients and a controlled provider to verify request signals, disconnect cancellation across Chat Completions, legacy Completions, and Responses, stopped delta forwarding, cancellation while provider execution is pending, and no SSE iterator startup after an abort. `tests/provider-errors.test.ts` verifies provider-reported cancellation ends chat and compaction requests with a safe 502 response. `packages/providers/cursor/tests/provider.run.test.ts` verifies single SDK cancellation, early iterator cleanup, no cancellation after completion, listener cleanup, and no send after an abort during session acquisition.
+
+**Provider limitation:** The installed Cursor SDK's `Run.cancel()` calls `client.cancelRun` and aborts its local stream controller. Mock tests prove that this method is called once; they do not prove that remote Cursor processing stopped. The SDK's `agent.send()` options do not accept an `AbortSignal`. If that call is already pending when the client disconnects, the gateway cannot interrupt it until it returns a `Run`; the adapter then sees the aborted signal and dispatches `Run.cancel()`. No live Cursor call was made.
+
+**Responses contract:** The `POST /v1/responses/{id}/cancel` endpoint remains limited to background Responses under the OpenAI contract. This gateway rejects `background: true`, so explicit Response cancellation is unavailable. Disconnect cancellation for the HTTP request remains supported. See `docs/api.md`.
 
 ### AUD-04 — Provider error text is returned without sanitization
 

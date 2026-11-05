@@ -8,6 +8,8 @@ import {
 } from "@agent-runtime-gateway/compatibility-openai";
 import { getGatewayServices } from "../../services/gateway.js";
 import { resolveRequestApiKey } from "../../utils/auth.js";
+import { sendHttpError } from "../../utils/error-handler.js";
+import { createRequestCancellation } from "../../utils/request-cancellation.js";
 
 export function handleInputTokens(req: Request, res: Response): void {
   try {
@@ -27,6 +29,7 @@ export function handleInputTokens(req: Request, res: Response): void {
 
 export async function handleCompact(req: Request, res: Response): Promise<void> {
   const services = getGatewayServices();
+  const cancellation = createRequestCancellation(req, res);
 
   try {
     const body = req.body as Record<string, unknown>;
@@ -50,9 +53,12 @@ export async function handleCompact(req: Request, res: Response): Promise<void> 
       model: cursorModel.id,
       message: prompt,
       credential: { type: "api_key", value: apiKey },
+      signal: cancellation.signal,
     });
 
-    const compactedText = (await collectRunText(run, res)) ?? "";
+    if (cancellation.signal.aborted) return;
+    const compactedText = await collectRunText(run, res, cancellation.signal);
+    if (compactedText === null) return;
 
     const id = `resp_${crypto.randomUUID().replaceAll("-", "")}`;
     const created = Math.floor(Date.now() / 1000);
@@ -65,7 +71,9 @@ export async function handleCompact(req: Request, res: Response): Promise<void> 
       compacted_context: compactedText,
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Internal error";
-    res.status(500).json(openAiErrorPayload(message, "internal_error"));
+    if (cancellation.signal.aborted || res.destroyed) return;
+    sendHttpError(error, req, res);
+  } finally {
+    cancellation.dispose();
   }
 }

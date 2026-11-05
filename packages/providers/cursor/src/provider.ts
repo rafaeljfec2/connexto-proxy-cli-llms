@@ -83,6 +83,7 @@ export class CursorProvider implements AgentProvider {
   }
 
   async execute(input: AgentExecutionInput): Promise<AgentRun> {
+    input.signal?.throwIfAborted();
     const apiKey = resolveCursorApiKey(input.credential);
     const workingDirectory = input.workingDirectory ?? this.defaultWorkingDirectory;
 
@@ -97,6 +98,8 @@ export class CursorProvider implements AgentProvider {
     } catch (error) {
       throwNormalized(error);
     }
+
+    input.signal?.throwIfAborted();
 
     let run: Run;
     try {
@@ -126,6 +129,34 @@ function adaptCursorRun(input: {
 }): AgentRun {
   const { run, providerId, sessionId, model, signal } = input;
   let resultPromise: Promise<AgentResult> | undefined;
+  let cancellationPromise: Promise<void> | undefined;
+  let terminal = false;
+  let abortListener: (() => void) | undefined;
+
+  const removeAbortListener = (): void => {
+    if (signal !== undefined && abortListener !== undefined) {
+      signal.removeEventListener("abort", abortListener);
+      abortListener = undefined;
+    }
+  };
+
+  const cancelOnce = (): Promise<void> => {
+    if (terminal || run.status !== "running") {
+      removeAbortListener();
+      return Promise.resolve();
+    }
+
+    cancellationPromise ??= (async () => {
+      try {
+        await run.cancel();
+      } catch {
+        // Run may already be terminal.
+      } finally {
+        removeAbortListener();
+      }
+    })();
+    return cancellationPromise;
+  };
 
   const resolveResult = (): Promise<AgentResult> => {
     resultPromise ??= (async () => {
@@ -141,34 +172,31 @@ function adaptCursorRun(input: {
             code: normalized.code,
           },
         };
+      } finally {
+        terminal = true;
+        removeAbortListener();
       }
     })();
     return resultPromise;
   };
 
   if (signal !== undefined) {
-    if (signal.aborted) {
-      void run.cancel().catch(() => undefined);
-    } else {
-      signal.addEventListener(
-        "abort",
-        () => {
-          void run.cancel().catch(() => undefined);
-        },
-        { once: true },
-      );
-    }
+    abortListener = () => {
+      void cancelOnce();
+    };
+    if (signal.aborted) void cancelOnce();
+    else signal.addEventListener("abort", abortListener, { once: true });
   }
 
   async function* events() {
-    yield createRunStartedEvent({
-      runId: run.id,
-      providerId,
-      sessionId,
-      model,
-    });
-
     try {
+      yield createRunStartedEvent({
+        runId: run.id,
+        providerId,
+        sessionId,
+        model,
+      });
+
       for await (const message of run.stream()) {
         for (const event of mapSdkMessageToEvents(message, run.id)) {
           yield event;
@@ -193,6 +221,11 @@ function adaptCursorRun(input: {
     } catch (error) {
       const normalized = normalizeCursorError(error);
       yield createRunFailedEvent(run.id, normalized.message, normalized.code);
+    } finally {
+      if (!terminal && cancellationPromise === undefined) {
+        void cancelOnce();
+      }
+      removeAbortListener();
     }
   }
 
@@ -200,12 +233,6 @@ function adaptCursorRun(input: {
     id: run.id,
     events: events(),
     wait: resolveResult,
-    cancel: async (): Promise<void> => {
-      try {
-        await run.cancel();
-      } catch {
-        // Run may already be terminal.
-      }
-    },
+    cancel: cancelOnce,
   };
 }

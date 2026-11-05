@@ -16,7 +16,9 @@ import { getGatewayServices } from "../services/gateway.js";
 import { resolveRequestApiKey } from "../utils/auth.js";
 import { resolveSessionAffinity } from "../utils/session.js";
 import { initSseHeaders } from "../utils/sse.js";
-import { getLogger, toSafeError } from "../utils/logger.js";
+import { getLogger } from "../utils/logger.js";
+import { sendHttpError } from "../utils/error-handler.js";
+import { createRequestCancellation } from "../utils/request-cancellation.js";
 
 export function registerChatCompletionRoutes(app: Express): void {
   app.post(
@@ -26,6 +28,7 @@ export function registerChatCompletionRoutes(app: Express): void {
         typeof res.locals.requestId === "string"
           ? res.locals.requestId
           : crypto.randomUUID();
+      const cancellation = createRequestCancellation(req, res);
 
       try {
         const body = req.body as {
@@ -42,9 +45,7 @@ export function registerChatCompletionRoutes(app: Express): void {
           prepared = prepareChatRequest(body, cursorModel);
         } catch (err) {
           if (err instanceof HttpError) {
-            res
-              .status(err.status)
-              .json(openAiErrorPayload(err.message, err.code, err.param));
+            sendHttpError(err, req, res);
             return;
           }
           res
@@ -74,8 +75,10 @@ export function registerChatCompletionRoutes(app: Express): void {
           model: cursorModel.id,
           message: prepared.prompt.text,
           credential: { type: "api_key", value: apiKey },
+          signal: cancellation.signal,
         });
 
+        if (cancellation.signal.aborted) return;
         if (prepared.stream) {
           initSseHeaders(res);
 
@@ -87,6 +90,7 @@ export function registerChatCompletionRoutes(app: Express): void {
           let firstDeltaMs: number | undefined;
 
           for await (const event of run.events) {
+            if (cancellation.signal.aborted) break;
             if (event.type === "message.delta" && event.delta) {
               if (firstDeltaMs === undefined) {
                 firstDeltaMs =
@@ -99,6 +103,7 @@ export function registerChatCompletionRoutes(app: Express): void {
             }
           }
 
+          if (cancellation.signal.aborted) return;
           const providerDurationMs =
             Math.round((performance.now() - providerStart) * 100) / 100;
 
@@ -141,11 +146,12 @@ export function registerChatCompletionRoutes(app: Express): void {
           return;
         }
 
-        const fullText = await collectRunText(run, res);
+        const fullText = await collectRunText(run, res, cancellation.signal);
         const providerDurationMs =
           Math.round((performance.now() - providerStart) * 100) / 100;
 
         if (fullText === null) {
+          if (cancellation.signal.aborted) return;
           getLogger().warn(
             {
               requestId,
@@ -183,21 +189,10 @@ export function registerChatCompletionRoutes(app: Express): void {
 
         res.status(200).json(response);
       } catch (error) {
-        const safeErr = toSafeError(error);
-        getLogger().error(
-          {
-            requestId,
-            provider: "cursor",
-            errorType: safeErr.type,
-            ...(safeErr.code ? { errorCode: safeErr.code } : {}),
-          },
-          "request processing error",
-        );
-        res
-          .status(500)
-          .json(
-            openAiErrorPayload(safeErr.message ?? "Internal error", "internal_error"),
-          );
+        if (cancellation.signal.aborted || res.destroyed) return;
+        sendHttpError(error, req, res);
+      } finally {
+        cancellation.dispose();
       }
     },
   );
