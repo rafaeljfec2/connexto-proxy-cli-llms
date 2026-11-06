@@ -142,4 +142,65 @@ describe("AntigravityAuthManager Unit Tests", () => {
     await manager.startAuth();
     expect(spawned).toBe(true);
   });
+
+  it("supports loopback redirect URI as default when configured", async () => {
+    const manager = new AntigravityAuthManager({
+      defaultRedirectUri: "http://127.0.0.1:3000/v1/antigravity/auth/callback",
+      accountDetector: () => Promise.resolve({ authenticated: false }),
+    });
+
+    const start = await manager.startAuth();
+    expect(start.authUrl).toContain(
+      encodeURIComponent("http://127.0.0.1:3000/v1/antigravity/auth/callback"),
+    );
+  });
+
+  it("exchanges code for tokens using tokenExchanger and extracts email from JWT", async () => {
+    // Generate a mock JWT ID token with email payload
+    const header = Buffer.from(JSON.stringify({ alg: "RS256" })).toString("base64url");
+    const payload = Buffer.from(
+      JSON.stringify({ email: "oauth-user@example.com", sub: "12345" }),
+    ).toString("base64url");
+    const mockIdToken = `${header}.${payload}.mock-signature`;
+
+    let exchangerCalledWith:
+      | { clientId: string; code: string; codeVerifier: string; redirectUri: string }
+      | undefined;
+    let tokensPersistedEmail: string | undefined;
+
+    const manager = new AntigravityAuthManager({
+      defaultRedirectUri: "http://127.0.0.1:3000/v1/antigravity/auth/callback",
+      tokenExchanger: (params) => {
+        exchangerCalledWith = params;
+        return Promise.resolve({
+          access_token: "ya29.mock-access-token",
+          refresh_token: "1//mock-refresh-token",
+          id_token: mockIdToken,
+          token_type: "Bearer",
+          expires_in: 3600,
+        });
+      },
+      onTokensPersisted: (_tokens, email) => {
+        tokensPersistedEmail = email;
+        return Promise.resolve();
+      },
+      accountDetector: () => Promise.resolve({ authenticated: false }),
+    });
+
+    const start = await manager.startAuth();
+    const result = await manager.handleCallback({
+      state: start.state,
+      code: "google-auth-code-test",
+    });
+
+    expect(result.status).toBe("completed");
+    expect(result.account).toBe("oauth-user@example.com");
+    expect(tokensPersistedEmail).toBe("oauth-user@example.com");
+    expect(exchangerCalledWith).toBeDefined();
+    expect(exchangerCalledWith?.code).toBe("google-auth-code-test");
+    expect(exchangerCalledWith?.redirectUri).toBe(
+      "http://127.0.0.1:3000/v1/antigravity/auth/callback",
+    );
+    expect(exchangerCalledWith?.codeVerifier).toBeDefined();
+  });
 });

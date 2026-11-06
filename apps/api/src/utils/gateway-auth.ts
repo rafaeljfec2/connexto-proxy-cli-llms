@@ -11,6 +11,7 @@ const publicReadEndpoints = new Set([
   "GET /v1",
   "GET /health",
   "GET /v1/models",
+  "GET /v1/antigravity/auth/callback",
 ]);
 
 type GatewayAuthConfig = Pick<Env, "HOST"> &

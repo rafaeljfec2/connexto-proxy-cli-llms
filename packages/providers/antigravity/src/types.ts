@@ -9,6 +9,8 @@ export interface AntigravityAuthOperation {
   readonly status: AntigravityAuthOperationStatus;
   readonly authUrl?: string;
   readonly state: string;
+  readonly codeVerifier?: string;
+  readonly redirectUri?: string;
   readonly createdAt: string;
   readonly expiresAt: string;
   readonly error?: string;
@@ -48,6 +50,23 @@ export interface AntigravityAuthCallbackResult {
   readonly message: string;
 }
 
+export interface AntigravityTokens {
+  readonly access_token: string;
+  readonly refresh_token?: string;
+  readonly id_token?: string;
+  readonly token_type: string;
+  readonly expires_in?: number;
+  readonly expiry_date?: number;
+  readonly scope?: string;
+}
+
+export type AntigravityTokenExchanger = (params: {
+  readonly clientId: string;
+  readonly code: string;
+  readonly codeVerifier: string;
+  readonly redirectUri: string;
+}) => Promise<AntigravityTokens>;
+
 export interface AntigravityAccountInfo {
   readonly authenticated: boolean;
   readonly account?: string;
@@ -55,8 +74,14 @@ export interface AntigravityAccountInfo {
 
 export interface AntigravityAuthManagerOptions {
   readonly cliPath?: string;
+  readonly defaultRedirectUri?: string;
   readonly operationTtlMs?: number;
   readonly accountDetector?: () => Promise<AntigravityAccountInfo>;
+  readonly tokenExchanger?: AntigravityTokenExchanger;
+  readonly onTokensPersisted?: (
+    tokens: AntigravityTokens,
+    email?: string,
+  ) => Promise<void>;
   readonly cliLoginSpawner?: (params: {
     operationId: string;
     authUrl: string;

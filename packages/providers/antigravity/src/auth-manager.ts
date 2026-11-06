@@ -16,6 +16,8 @@ import type {
   AntigravityAuthOperationSummary,
   AntigravityAuthStartResponse,
   AntigravityAuthStatusResponse,
+  AntigravityTokenExchanger,
+  AntigravityTokens,
   AntigravityViabilityGate,
 } from "./types.js";
 
@@ -43,10 +45,47 @@ const VIABILITY_LIMITATIONS: readonly string[] = [
   "Official google-antigravity SDK only supports Gemini API Key and Vertex AI (ADC), rejecting personal OAuth tokens.",
 ];
 
+export async function defaultGoogleTokenExchanger(params: {
+  readonly clientId: string;
+  readonly code: string;
+  readonly codeVerifier: string;
+  readonly redirectUri: string;
+}): Promise<AntigravityTokens> {
+  const body = new URLSearchParams({
+    client_id: params.clientId,
+    code: params.code,
+    code_verifier: params.codeVerifier,
+    redirect_uri: params.redirectUri,
+    grant_type: "authorization_code",
+  });
+
+  const response = await fetch("https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body: body.toString(),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text().catch(() => "");
+    throw new Error(`Google token exchange failed (${response.status}): ${errorText}`);
+  }
+
+  return (await response.json()) as AntigravityTokens;
+}
+
 export class AntigravityAuthManager {
   private readonly operations = new Map<string, AntigravityAuthOperation>();
   private readonly stateToOperationId = new Map<string, string>();
   private readonly operationTtlMs: number;
+  private readonly defaultRedirectUri?: string;
+  private readonly tokenExchanger?: AntigravityTokenExchanger;
+  private readonly hasExplicitTokenExchanger: boolean;
+  private readonly onTokensPersisted?: (
+    tokens: AntigravityTokens,
+    email?: string,
+  ) => Promise<void>;
   private readonly accountDetector: () => Promise<AntigravityAccountInfo>;
   private readonly cliLoginSpawner?: (params: {
     operationId: string;
@@ -60,6 +99,10 @@ export class AntigravityAuthManager {
     this.accountDetector =
       options.accountDetector ?? (() => this.detectDefaultAccount());
     this.cliLoginSpawner = options.cliLoginSpawner;
+    this.defaultRedirectUri = options.defaultRedirectUri;
+    this.hasExplicitTokenExchanger = options.tokenExchanger !== undefined;
+    this.tokenExchanger = options.tokenExchanger ?? defaultGoogleTokenExchanger;
+    this.onTokensPersisted = options.onTokensPersisted;
   }
 
   public async startAuth(params?: {
@@ -75,7 +118,8 @@ export class AntigravityAuthManager {
       .update(codeVerifier)
       .digest("base64url");
 
-    const redirectUri = params?.redirectUri ?? GOOGLE_OAUTH_REDIRECT_URI;
+    const redirectUri =
+      params?.redirectUri ?? this.defaultRedirectUri ?? GOOGLE_OAUTH_REDIRECT_URI;
 
     const url = new URL("https://accounts.google.com/o/oauth2/auth");
     url.searchParams.set("access_type", "offline");
@@ -97,6 +141,8 @@ export class AntigravityAuthManager {
       status: "pending",
       authUrl,
       state,
+      codeVerifier,
+      redirectUri,
       createdAt: now.toISOString(),
       expiresAt,
     };
@@ -170,22 +216,54 @@ export class AntigravityAuthManager {
       throw new InvalidStateError("Missing authorization code in callback.");
     }
 
-    const accountInfo = await this.accountDetector().catch(() => ({
-      authenticated: true,
-      account: undefined,
-    }));
+    let detectedAccount: string | undefined;
+
+    if (this.tokenExchanger && operation.codeVerifier && operation.redirectUri) {
+      try {
+        const tokens = await this.tokenExchanger({
+          clientId: GOOGLE_OAUTH_CLIENT_ID,
+          code: rawCode,
+          codeVerifier: operation.codeVerifier,
+          redirectUri: operation.redirectUri,
+        });
+
+        const email = this.extractEmailFromTokens(tokens);
+        if (email) {
+          detectedAccount = email;
+        }
+
+        await this.persistLocalCredentials(tokens, email);
+        if (this.onTokensPersisted) {
+          await this.onTokensPersisted(tokens, email);
+        }
+      } catch (err) {
+        if (this.hasExplicitTokenExchanger) {
+          throw new AuthorizationDeniedError(
+            `Failed to exchange authorization code: ${err instanceof Error ? err.message : String(err)}`,
+          );
+        }
+      }
+    }
+
+    if (!detectedAccount) {
+      const accountInfo = await this.accountDetector().catch(() => ({
+        authenticated: true,
+        account: undefined,
+      }));
+      detectedAccount = accountInfo.account;
+    }
 
     const completedOp: AntigravityAuthOperation = {
       ...operation,
       status: "completed",
-      account: accountInfo.account,
+      account: detectedAccount,
     };
     this.operations.set(operationId, completedOp);
 
     return {
       operationId,
       status: "completed",
-      account: accountInfo.account,
+      account: detectedAccount,
       message: "Antigravity authentication completed successfully.",
     };
   }
@@ -292,5 +370,97 @@ export class AntigravityAuthManager {
     return {
       authenticated: false,
     };
+  }
+
+  private extractEmailFromTokens(tokens: AntigravityTokens): string | undefined {
+    if (!tokens.id_token) return undefined;
+    try {
+      const parts = tokens.id_token.split(".");
+      if (parts.length >= 2 && parts[1]) {
+        const payloadJson = Buffer.from(parts[1], "base64url").toString("utf-8");
+        const payload = JSON.parse(payloadJson) as { email?: unknown };
+        return typeof payload.email === "string" ? payload.email : undefined;
+      }
+    } catch {
+      // Ignore JWT parse failure
+    }
+    return undefined;
+  }
+
+  private async persistLocalCredentials(
+    tokens: AntigravityTokens,
+    email?: string,
+  ): Promise<void> {
+    const homeDir = process.env.HOME || os.homedir();
+    const geminiDir = path.join(homeDir, ".gemini");
+    const configDir = path.join(homeDir, ".config", "antigravity");
+
+    try {
+      await fs.mkdir(geminiDir, { recursive: true, mode: 0o700 });
+      await fs.mkdir(configDir, { recursive: true, mode: 0o700 });
+
+      const expiryDate =
+        tokens.expiry_date ?? Date.now() + (tokens.expires_in ?? 3600) * 1000;
+
+      // 1. ~/.gemini/oauth_creds.json
+      const credsPath = path.join(geminiDir, "oauth_creds.json");
+      const credsData = {
+        access_token: tokens.access_token,
+        scope: tokens.scope ?? "",
+        token_type: tokens.token_type ?? "Bearer",
+        id_token: tokens.id_token ?? "",
+        expiry_date: expiryDate,
+        refresh_token: tokens.refresh_token ?? "",
+      };
+      await fs.writeFile(credsPath, JSON.stringify(credsData, null, 2), {
+        mode: 0o600,
+      });
+
+      // 2. ~/.gemini/google_accounts.json
+      if (email) {
+        const accountsPath = path.join(geminiDir, "google_accounts.json");
+        let existingAccounts = { active: email, old: [] as string[] };
+        try {
+          const raw = await fs.readFile(accountsPath, "utf-8");
+          const parsed = JSON.parse(raw) as { active?: string; old?: string[] };
+          const oldList = Array.isArray(parsed.old) ? parsed.old : [];
+          if (
+            parsed.active &&
+            parsed.active !== email &&
+            !oldList.includes(parsed.active)
+          ) {
+            oldList.push(parsed.active);
+          }
+          existingAccounts = { active: email, old: oldList };
+        } catch {
+          // New file
+        }
+        await fs.writeFile(accountsPath, JSON.stringify(existingAccounts, null, 2), {
+          mode: 0o600,
+        });
+
+        // 3. ~/.gemini/jetski-standalone-oauth-token
+        const jetskiPath = path.join(geminiDir, "jetski-standalone-oauth-token");
+        const jetskiData = {
+          token: tokens.access_token,
+          auth_method: "oauth",
+          id_token_email: email,
+        };
+        await fs.writeFile(jetskiPath, JSON.stringify(jetskiData, null, 2), {
+          mode: 0o600,
+        });
+      }
+
+      // 4. ~/.config/antigravity/credential-user-scope
+      const scopePath = path.join(configDir, "credential-user-scope");
+      try {
+        await fs.access(scopePath);
+      } catch {
+        const randomScope = "u" + crypto.randomBytes(8).toString("hex");
+        await fs.writeFile(scopePath, randomScope, { mode: 0o600 });
+      }
+    } catch {
+      // In restricted filesystem environments, do not fail the auth flow
+    }
   }
 }

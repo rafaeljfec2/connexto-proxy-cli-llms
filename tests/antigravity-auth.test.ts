@@ -128,6 +128,25 @@ describe("Antigravity Auth HTTP Routes Suite", () => {
     expect(opRes.body.status).toBe("completed");
   });
 
+  it("GET /v1/antigravity/auth/callback returns user-friendly HTML when requested by a browser", async () => {
+    const app = buildApp({ HOST: "127.0.0.1" });
+
+    const startRes = await request(app).post("/v1/antigravity/auth/start").send({});
+
+    const htmlRes = await request(app)
+      .get("/v1/antigravity/auth/callback")
+      .set("Accept", "text/html,application/xhtml+xml")
+      .query({
+        state: startRes.body.state,
+        code: "browser-auth-code-12345",
+      });
+
+    expect(htmlRes.status).toBe(200);
+    expect(htmlRes.headers["content-type"]).toContain("text/html");
+    expect(htmlRes.text).toContain("Autenticação Concluída!");
+    expect(htmlRes.text).toContain("fechar esta janela");
+  });
+
   it("POST /v1/antigravity/auth/callback completes flow programmatically via JSON", async () => {
     const app = buildApp({ HOST: "127.0.0.1" });
 

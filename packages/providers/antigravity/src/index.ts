@@ -1,4 +1,4 @@
-export { AntigravityAuthManager } from "./auth-manager.js";
+export { AntigravityAuthManager, defaultGoogleTokenExchanger } from "./auth-manager.js";
 export {
   AntigravityProvider,
   type AntigravityAcpClient,
@@ -26,5 +26,7 @@ export type {
   AntigravityAuthOperationSummary,
   AntigravityAuthStartResponse,
   AntigravityAuthStatusResponse,
+  AntigravityTokenExchanger,
+  AntigravityTokens,
   AntigravityViabilityGate,
 } from "./types.js";

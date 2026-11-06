@@ -65,10 +65,7 @@ const envSchema = z
     RESPONSE_MAX_ENTRIES: z.coerce.number().int().positive().default(512),
     SESSION_TTL_MS: z.coerce.number().int().positive().default(86_400_000),
     SESSION_STORAGE_DRIVER: z.enum(["filesystem", "memory"]).default("filesystem"),
-    SESSION_STORAGE_PATH: z
-      .string()
-      .trim()
-      .default("/var/lib/connexto-proxy/sessions"),
+    SESSION_STORAGE_PATH: z.string().trim().default("/var/lib/connexto-proxy/sessions"),
     LIFECYCLE_CLEANUP_INTERVAL_MS: z.coerce.number().int().positive().default(60_000),
     CURSOR_DEFAULT_WORKING_DIRECTORY: z
       .string()

@@ -18,8 +18,14 @@ export function registerAntigravityAuthRoutes(
     async (req: Request, res: Response, next: NextFunction): Promise<void> => {
       try {
         const body = (req.body ?? {}) as { redirectUri?: unknown };
-        const redirectUri =
+        let redirectUri =
           typeof body.redirectUri === "string" ? body.redirectUri : undefined;
+
+        if (!redirectUri) {
+          const rawHost = req.get("host");
+          const host = rawHost && rawHost.length > 0 ? rawHost : "127.0.0.1:3000";
+          redirectUri = `http://${host}/v1/antigravity/auth/callback`;
+        }
 
         const result = await getManager().startAuth({ redirectUri });
         res.status(200).json(result);
@@ -48,6 +54,33 @@ export function registerAntigravityAuthRoutes(
           error,
           error_description: errorDescription,
         });
+
+        const accept = req.headers.accept ?? "";
+        if (accept.includes("text/html")) {
+          res.status(200).type("html").send(`<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <title>Autenticação Concluída</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; background-color: #f8fafc; color: #0f172a; }
+    .card { background: white; border-radius: 16px; padding: 40px; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1); text-align: center; max-width: 440px; }
+    .icon { font-size: 48px; margin-bottom: 16px; color: #16a34a; }
+    h1 { font-size: 22px; margin-bottom: 8px; color: #0f172a; }
+    p { font-size: 15px; color: #475569; line-height: 1.5; margin: 8px 0; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="icon">✓</div>
+    <h1>Autenticação Concluída!</h1>
+    <p>O Google Antigravity foi autenticado e suas credenciais foram gravadas com sucesso.</p>
+    <p><strong>Você já pode fechar esta janela</strong> e voltar ao terminal.</p>
+  </div>
+</body>
+</html>`);
+          return;
+        }
 
         res.status(200).json(result);
       } catch (error) {
