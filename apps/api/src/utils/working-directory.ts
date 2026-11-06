@@ -20,7 +20,9 @@ export function resolveAgentWorkingDirectory(
   return undefined;
 }
 
-export function assertConfiguredWorkingDirectoryExists(configuredDefault: string): void {
+export function assertConfiguredWorkingDirectoryExists(
+  configuredDefault: string,
+): void {
   const resolved = path.resolve(configuredDefault.trim());
   if (!fs.existsSync(resolved)) {
     throw new Error(`CURSOR_DEFAULT_WORKING_DIRECTORY does not exist: ${resolved}`);

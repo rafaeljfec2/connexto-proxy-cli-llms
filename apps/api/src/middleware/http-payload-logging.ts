@@ -33,9 +33,7 @@ export function createHttpPayloadLoggingMiddleware(
         direction: "inbound",
         method: req.method,
         path: (req.path ?? "").split("?")[0],
-        headers: sanitizeRequestHeaders(
-          req.headers as Record<string, unknown>,
-        ),
+        headers: sanitizeRequestHeaders(req.headers as Record<string, unknown>),
         query: serializePayloadForLog(req.query, maxBytes),
         body: serializePayloadForLog(req.body, maxBytes),
       },
@@ -95,10 +93,7 @@ export function createHttpPayloadLoggingMiddleware(
     };
 
     const originalWrite = res.write.bind(res);
-    res.write = function writeWithCapture(
-      chunk: unknown,
-      ...args: unknown[]
-    ): boolean {
+    res.write = function writeWithCapture(chunk: unknown, ...args: unknown[]): boolean {
       if (chunk !== undefined && chunk !== null) {
         if (Buffer.isBuffer(chunk)) {
           chunks.push(chunk);
@@ -106,10 +101,7 @@ export function createHttpPayloadLoggingMiddleware(
           chunks.push(Buffer.from(chunk));
         }
       }
-      const writeFn = originalWrite as (
-        c: unknown,
-        ...rest: unknown[]
-      ) => boolean;
+      const writeFn = originalWrite as (c: unknown, ...rest: unknown[]) => boolean;
       return writeFn(chunk, ...args);
     };
 

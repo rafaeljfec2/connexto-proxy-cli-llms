@@ -4,12 +4,12 @@ Product repo wired for the forge skill **`connexto-development-workflow`**. Inst
 
 ## Config
 
-| Item | Value |
-|---|---|
-| Adapter | `connexto.project.json` at repo root |
-| Run state | `.connexto/runs/<DEMAND-ID>/` (gitignored) |
-| AI Memory | `rafael` / `connexto-proxy-cli-llms` (see `.ai-memory.toml`) |
-| Validation gates | `pnpm test`, `pnpm lint`, `pnpm typecheck` |
+| Item             | Value                                                        |
+| ---------------- | ------------------------------------------------------------ |
+| Adapter          | `connexto.project.json` at repo root                         |
+| Run state        | `.connexto/runs/<DEMAND-ID>/` (gitignored)                   |
+| AI Memory        | `rafael` / `connexto-proxy-cli-llms` (see `.ai-memory.toml`) |
+| Validation gates | `pnpm test`, `pnpm lint`, `pnpm typecheck`                   |
 
 ```bash
 python3 ../my-skills-forge/skills/engineering/connexto-development-workflow/scripts/cdw.py \

@@ -20,10 +20,19 @@ services:
       GATEWAY_API_TOKEN: ${GATEWAY_API_TOKEN:-docker-local-gateway-dev}
       GATEWAY_JSON_BODY_LIMIT_BYTES: ${GATEWAY_JSON_BODY_LIMIT_BYTES:-33554432}
       CURSOR_DEFAULT_WORKING_DIRECTORY: /workspace
+      SESSION_STORAGE_DRIVER: ${SESSION_STORAGE_DRIVER:-filesystem}
+      SESSION_STORAGE_PATH: ${SESSION_STORAGE_PATH:-/var/lib/connexto-proxy/sessions}
     volumes:
       - ${CURSOR_WORKSPACE_HOST_PATH:-../connexto-aihub}:/workspace:rw
+      - proxy-sessions:/var/lib/connexto-proxy/sessions:rw
+      # Provider host authentication mount points (preserves Google / Antigravity OAuth tokens and CLI settings across recreations)
+      - ${HOST_GEMINI_DIR:-~/.gemini}:/app/.gemini:rw
+      - ${HOST_ANTIGRAVITY_CONFIG_DIR:-~/.config/antigravity}:/app/.config/antigravity:rw
     # Match the WSL/Linux host uid so the agent can write under the bind-mounted workspace.
     user: ${CURSOR_CONTAINER_USER:-1000:1000}
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true
+
+volumes:
+  proxy-sessions:

@@ -54,11 +54,7 @@ const envSchema = z
         if (typeof value === "boolean") return value;
         return value !== "false" && value !== "0";
       }),
-    LOG_HTTP_PAYLOAD_MAX_BYTES: z.coerce
-      .number()
-      .int()
-      .positive()
-      .default(262_144),
+    LOG_HTTP_PAYLOAD_MAX_BYTES: z.coerce.number().int().positive().default(262_144),
     /** Max JSON request body size for express.json(); aligns with AI Hub gateway default (32 MiB). */
     GATEWAY_JSON_BODY_LIMIT_BYTES: z.coerce
       .number()
@@ -68,6 +64,11 @@ const envSchema = z
     RESPONSE_TTL_MS: z.coerce.number().int().positive().default(3_600_000),
     RESPONSE_MAX_ENTRIES: z.coerce.number().int().positive().default(512),
     SESSION_TTL_MS: z.coerce.number().int().positive().default(86_400_000),
+    SESSION_STORAGE_DRIVER: z.enum(["filesystem", "memory"]).default("filesystem"),
+    SESSION_STORAGE_PATH: z
+      .string()
+      .trim()
+      .default("/var/lib/connexto-proxy/sessions"),
     LIFECYCLE_CLEANUP_INTERVAL_MS: z.coerce.number().int().positive().default(60_000),
     CURSOR_DEFAULT_WORKING_DIRECTORY: z
       .string()

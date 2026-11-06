@@ -165,7 +165,7 @@ See [docs/testing.md](docs/testing.md).
 | ------------------------------------------------------------------ | -------------------------- |
 | [docs/README.md](docs/README.md)                                   | Documentation map          |
 | [docs/development.md](docs/development.md)                         | Day-to-day development     |
-| [docs/connexto-workflow.md](docs/connexto-workflow.md)               | Connexto demand workflow   |
+| [docs/connexto-workflow.md](docs/connexto-workflow.md)             | Connexto demand workflow   |
 | [docs/architecture.md](docs/architecture.md)                       | System structure           |
 | [docs/api.md](docs/api.md)                                         | HTTP endpoints             |
 | [docs/configuration.md](docs/configuration.md)                     | Environment & auth         |

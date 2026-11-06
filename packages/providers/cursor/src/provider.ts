@@ -5,6 +5,8 @@ import type {
   AgentRun,
   AgentEvent,
   Model,
+  NamespacedSessionStore,
+  SessionStore,
 } from "@agent-runtime-gateway/core";
 import type { Run, SDKAgent } from "@cursor/sdk";
 import { CursorClient } from "./client.js";
@@ -21,7 +23,11 @@ import {
   mapSdkMessageToEvents,
 } from "./events.js";
 import { CursorProviderError } from "./provider-error.js";
-import { CursorSessionManager, type CursorSessionManagerOptions } from "./sessions.js";
+import {
+  CursorSessionManager,
+  type CursorSessionManagerOptions,
+  type CursorSessionRecord,
+} from "./sessions.js";
 
 function throwNormalized(error: unknown): never {
   const normalized = normalizeCursorError(error);
@@ -35,6 +41,8 @@ export interface CursorProviderOptions {
   client?: CursorClient;
   sessions?: CursorSessionManager;
   sessionOptions?: CursorSessionManagerOptions;
+  sessionStore?:
+    NamespacedSessionStore<CursorSessionRecord> | SessionStore<CursorSessionRecord>;
   agentName?: string;
   defaultWorkingDirectory?: string;
   /** Used by listModels when the gateway has not wired per-request credentials yet */
@@ -59,10 +67,11 @@ export class CursorProvider implements AgentProvider {
     this.client = options.client ?? new CursorClient();
     this.sessions =
       options.sessions ??
-      new CursorSessionManager(
-        this.client,
-        options.sessionOptions ?? { maxSessions: 128 },
-      );
+      new CursorSessionManager(this.client, {
+        ...(options.sessionOptions ?? { maxSessions: 128 }),
+        store: options.sessionOptions?.store ?? options.sessionStore,
+      });
+
     this.agentName = options.agentName ?? "agent-runtime-gateway";
     this.defaultWorkingDirectory = options.defaultWorkingDirectory ?? process.cwd();
     this.listingCredential =

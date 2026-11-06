@@ -7,5 +7,5 @@ packages:
 onlyBuiltDependencies:
   - esbuild
 allowBuilds:
-  '@scarf/scarf': false
+  "@scarf/scarf": false
   esbuild: true

@@ -37,7 +37,9 @@ RUN apt-get update \
   && apt-get install -y --no-install-recommends ca-certificates tini git \
   && rm -rf /var/lib/apt/lists/* \
   && groupadd --system --gid 1001 gateway \
-  && useradd --system --uid 1001 --gid gateway --home-dir /app gateway
+  && useradd --system --uid 1001 --gid gateway --home-dir /app gateway \
+  && mkdir -p /var/lib/connexto-proxy/sessions \
+  && chown -R gateway:gateway /var/lib/connexto-proxy
 
 WORKDIR /app
 

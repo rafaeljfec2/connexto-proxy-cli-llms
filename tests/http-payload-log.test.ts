@@ -44,13 +44,8 @@ describe("http payload logging helpers", () => {
   });
 
   it("parses SSE response bodies into event arrays", () => {
-    const sse =
-      'data: {"id":"1","choices":[]}\n\n' +
-      "data: [DONE]\n\n";
+    const sse = 'data: {"id":"1","choices":[]}\n\n' + "data: [DONE]\n\n";
     const parsed = parseResponseBodyForLog(sse, "text/event-stream", 32_768);
-    expect(parsed).toEqual([
-      { id: "1", choices: [] },
-      "[DONE]",
-    ]);
+    expect(parsed).toEqual([{ id: "1", choices: [] }, "[DONE]"]);
   });
 });

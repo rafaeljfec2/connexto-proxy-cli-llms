@@ -7,6 +7,8 @@ import type {
   AgentResult,
   AgentRun,
   Model,
+  NamespacedSessionStore,
+  SessionStore,
 } from "@agent-runtime-gateway/core";
 import {
   AcpClient,
@@ -39,6 +41,7 @@ import {
 import { acpModelId, ANTIGRAVITY_MODELS } from "./models.js";
 import {
   AntigravitySessionStore,
+  type AcpSessionRecord,
   type AntigravitySessionStoreOptions,
 } from "./session-store.js";
 
@@ -69,6 +72,8 @@ export interface AntigravityProviderOptions {
   readonly defaultWorkingDirectory?: string;
   readonly cancelGraceMs?: number;
   readonly sessionOptions?: AntigravitySessionStoreOptions;
+  readonly sessionStore?:
+    NamespacedSessionStore<AcpSessionRecord> | SessionStore<AcpSessionRecord>;
 }
 
 const DEFAULT_CANCEL_GRACE_MS = 3_000;
@@ -91,7 +96,10 @@ export class AntigravityProvider implements AgentProvider {
     this.clientFactory = options.clientFactory ?? createDefaultClient;
     this.defaultWorkingDirectory = options.defaultWorkingDirectory ?? process.cwd();
     this.cancelGraceMs = options.cancelGraceMs ?? DEFAULT_CANCEL_GRACE_MS;
-    this.sessions = new AntigravitySessionStore(options.sessionOptions);
+    this.sessions = new AntigravitySessionStore({
+      ...options.sessionOptions,
+      store: options.sessionOptions?.store ?? options.sessionStore,
+    });
   }
 
   public listModels(): Promise<Model[]> {
@@ -136,18 +144,19 @@ export class AntigravityProvider implements AgentProvider {
     gatewaySessionId: string,
     cwd: string,
   ): Promise<string> {
-    const savedSessionId = this.sessions.get(gatewaySessionId);
+    const savedSessionId = await this.sessions.resolve(gatewaySessionId);
     if (savedSessionId !== undefined) {
       try {
         await client.resumeSession(savedSessionId, cwd);
         return savedSessionId;
       } catch {
         // Resume failures fall back to a new ACP session, as Cursor does.
+        await this.sessions.delete(gatewaySessionId);
       }
     }
 
     const created = await client.createSession(cwd);
-    this.sessions.set(gatewaySessionId, created.sessionId);
+    await this.sessions.setPersisted(gatewaySessionId, created.sessionId);
     return created.sessionId;
   }
 

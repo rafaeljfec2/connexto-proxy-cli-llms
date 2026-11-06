@@ -3,12 +3,19 @@ import {
   ProviderRouter,
   RuntimeExecutor,
   ActiveResourceTracker,
+  FilesystemSessionStore,
+  InMemorySessionStore,
   type AgentProvider,
+  type SessionStore,
 } from "@agent-runtime-gateway/core";
-import { CursorProvider } from "@agent-runtime-gateway/provider-cursor";
+import {
+  CursorProvider,
+  type CursorProviderOptions,
+} from "@agent-runtime-gateway/provider-cursor";
 import {
   AntigravityAuthManager,
   AntigravityProvider,
+  type AntigravityProviderOptions,
 } from "@agent-runtime-gateway/provider-antigravity";
 import { ResponseSessionStore } from "@agent-runtime-gateway/compatibility-openai";
 import type { Env } from "../config/env.js";
@@ -23,12 +30,14 @@ export interface GatewayServices {
   antigravityProvider: AgentProvider;
   antigravityAuthManager: AntigravityAuthManager;
   responseStore: ResponseSessionStore;
+  sessionStore: SessionStore<unknown>;
   activeResources: ActiveResourceTracker;
   lifecycle: RuntimeLifecycle;
 }
 
 export interface GatewayServiceOptions {
   readonly antigravityProvider?: AgentProvider;
+  readonly sessionStore?: SessionStore<unknown>;
 }
 
 export function createGatewayServices(
@@ -37,6 +46,8 @@ export function createGatewayServices(
     | "RESPONSE_TTL_MS"
     | "RESPONSE_MAX_ENTRIES"
     | "SESSION_TTL_MS"
+    | "SESSION_STORAGE_DRIVER"
+    | "SESSION_STORAGE_PATH"
     | "LIFECYCLE_CLEANUP_INTERVAL_MS"
     | "CURSOR_DEFAULT_WORKING_DIRECTORY"
   >,
@@ -48,11 +59,20 @@ export function createGatewayServices(
     ttlMs: env?.RESPONSE_TTL_MS,
   });
 
-  const cursorProviderOptions: ConstructorParameters<typeof CursorProvider>[0] = {
+  const sessionStore =
+    options.sessionStore ??
+    (env?.SESSION_STORAGE_DRIVER === "memory"
+      ? new InMemorySessionStore<unknown>()
+      : new FilesystemSessionStore<unknown>({
+          rootDir: env?.SESSION_STORAGE_PATH ?? "/var/lib/connexto-proxy/sessions",
+        }));
+
+  const cursorProviderOptions: CursorProviderOptions = {
     sessionOptions: {
       maxSessions: 128,
       ttlMs: env?.SESSION_TTL_MS,
     },
+    sessionStore: sessionStore as unknown as CursorProviderOptions["sessionStore"],
     executionGuard: {
       onExecutionStart: ({ sessionId }) => {
         activeResources.pinSession(sessionId);
@@ -70,12 +90,14 @@ export function createGatewayServices(
 
   const registry = new ProviderRegistry();
   const cursorProvider = new CursorProvider(cursorProviderOptions);
+  const antigravityOptions: AntigravityProviderOptions = {
+    defaultWorkingDirectory: env?.CURSOR_DEFAULT_WORKING_DIRECTORY,
+    sessionOptions: { ttlMs: env?.SESSION_TTL_MS },
+    sessionStore: sessionStore as unknown as AntigravityProviderOptions["sessionStore"],
+  };
   const antigravityProvider =
-    options.antigravityProvider ??
-    new AntigravityProvider({
-      defaultWorkingDirectory: env?.CURSOR_DEFAULT_WORKING_DIRECTORY,
-      sessionOptions: { ttlMs: env?.SESSION_TTL_MS },
-    });
+    options.antigravityProvider ?? new AntigravityProvider(antigravityOptions);
+
   registry.register(cursorProvider);
   registry.register(antigravityProvider);
 
@@ -98,6 +120,7 @@ export function createGatewayServices(
     antigravityProvider,
     antigravityAuthManager,
     responseStore,
+    sessionStore,
     activeResources,
     lifecycle,
   };

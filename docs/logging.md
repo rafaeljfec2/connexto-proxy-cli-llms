@@ -8,12 +8,12 @@ The gateway provides structured, correlated logging using [Pino](https://github.
 
 The logger is configured via environment variables loaded on server startup:
 
-| Variable     | Values                                                                   | Default | Description                                                                                                         |
-| ------------ | ------------------------------------------------------------------------ | ------- | ------------------------------------------------------------------------------------------------------------------- |
-| `LOG_FORMAT` | `json` \| `pretty`                                                       | `json`  | Log output format. `json` outputs NDJSON; `pretty` uses `pino-pretty` for human-readable colorized terminal output. |
-| `LOG_LEVEL`  | `fatal` \| `error` \| `warn` \| `info` \| `debug` \| `trace` \| `silent` | `info`  | Minimum log severity to emit.                                                                                       |
-| `LOG_HTTP_PAYLOADS` | `true` \| `false` \| `1` \| `0`                                   | `true`  | When enabled, logs structured inbound/outbound HTTP bodies (see below).                                              |
-| `LOG_HTTP_PAYLOAD_MAX_BYTES` | positive integer                                          | `262144` | Maximum UTF-8 byte length per logged body; larger payloads are truncated with metadata.                    |
+| Variable                     | Values                                                                   | Default  | Description                                                                                                         |
+| ---------------------------- | ------------------------------------------------------------------------ | -------- | ------------------------------------------------------------------------------------------------------------------- |
+| `LOG_FORMAT`                 | `json` \| `pretty`                                                       | `json`   | Log output format. `json` outputs NDJSON; `pretty` uses `pino-pretty` for human-readable colorized terminal output. |
+| `LOG_LEVEL`                  | `fatal` \| `error` \| `warn` \| `info` \| `debug` \| `trace` \| `silent` | `info`   | Minimum log severity to emit.                                                                                       |
+| `LOG_HTTP_PAYLOADS`          | `true` \| `false` \| `1` \| `0`                                          | `true`   | When enabled, logs structured inbound/outbound HTTP bodies (see below).                                             |
+| `LOG_HTTP_PAYLOAD_MAX_BYTES` | positive integer                                                         | `262144` | Maximum UTF-8 byte length per logged body; larger payloads are truncated with metadata.                             |
 
 ### Switching Between JSON and Pretty Output
 
@@ -73,7 +73,10 @@ When `LOG_HTTP_PAYLOADS` is enabled (default), the gateway emits two additional 
   "path": "/v1/chat/completions",
   "headers": { "content-type": "application/json", "authorization": "[REDACTED]" },
   "query": {},
-  "body": { "model": "composer-2.5", "messages": [{ "role": "user", "content": "hello" }] },
+  "body": {
+    "model": "composer-2.5",
+    "messages": [{ "role": "user", "content": "hello" }]
+  },
   "msg": "http payload"
 }
 ```
