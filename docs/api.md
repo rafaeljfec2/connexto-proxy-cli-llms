@@ -66,6 +66,12 @@ The catalog includes Composer/Grok ids and namespaced Antigravity ids such as `a
 
 Provider selection uses the existing `model` field. Unprefixed Composer/Grok models continue to use Cursor; `antigravity:<model-id>` routes to the local ACP provider. This changes no route, request field, header, or response schema. Antigravity requests still follow gateway authorization, but do not require a Cursor API key.
 
+## Usage & Quotas
+
+| Method | Path                              | Gateway auth | Description                                                                                       |
+| ------ | --------------------------------- | ------------ | ------------------------------------------------------------------------------------------------- |
+| `GET`  | `/v1/providers/antigravity/usage` | **Yes**      | Official Antigravity account usage, tier, and model rate limits ([details](antigravity-usage.md)) |
+
 ## Chat Completions
 
 | Method | Path                   | Gateway auth | Description                                  |

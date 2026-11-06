@@ -7,6 +7,15 @@ export type {
   AgentRunStatus,
 } from "./contracts/execution.js";
 export type { Model, ProviderCredential } from "./contracts/model.js";
+export type {
+  ProviderUsageStatus,
+  QuotaNature,
+  ProviderQuotaMetric,
+  ProviderAccountUsageInfo,
+  ProviderUsageError,
+  ProviderUsageSnapshot,
+  ProviderUsageService,
+} from "./contracts/usage.js";
 export {
   InvalidProviderIdError,
   ProviderAlreadyRegisteredError,

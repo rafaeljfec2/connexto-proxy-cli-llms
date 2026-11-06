@@ -31,7 +31,13 @@ describe("Swagger / OpenAPI", () => {
       ],
     ).toBeDefined();
     expect(
+      response.body.paths["/v1/providers/antigravity/usage"],
+    ).toBeDefined();
+    expect(
       response.body.components.schemas.AntigravityAuthStatusResponse,
+    ).toBeDefined();
+    expect(
+      response.body.components.schemas.AntigravityUsageSnapshot,
     ).toBeDefined();
     expect(response.body.servers[0]?.url).toMatch(/^https?:\/\//);
   });

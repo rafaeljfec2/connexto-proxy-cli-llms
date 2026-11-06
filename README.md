@@ -123,13 +123,14 @@ There is **no separate gateway gate** yet: `GATEWAY_API_TOKEN` appears in `.env.
 
 ## Monorepo layout
 
-| Path                            | Package                                       | Role                                    |
-| ------------------------------- | --------------------------------------------- | --------------------------------------- |
-| `apps/api`                      | `@agent-runtime-gateway/api`                  | Express HTTP server                     |
-| `packages/core`                 | `@agent-runtime-gateway/core`                 | Provider contracts, registry, executor  |
-| `packages/providers/cursor`     | `@agent-runtime-gateway/provider-cursor`      | Cursor SDK + engine port                |
-| `packages/compatibility/openai` | `@agent-runtime-gateway/compatibility-openai` | OpenAI/Composer protocol & SSE          |
-| `tests/`                        | —                                             | Root Vitest suites (HTTP, logging, env) |
+| Path                             | Package                                       | Role                                    |
+| -------------------------------- | --------------------------------------------- | --------------------------------------- |
+| `apps/api`                       | `@agent-runtime-gateway/api`                  | Express HTTP server                     |
+| `packages/core`                  | `@agent-runtime-gateway/core`                 | Provider contracts, registry, executor  |
+| `packages/providers/cursor`      | `@agent-runtime-gateway/provider-cursor`      | Cursor SDK + engine port                |
+| `packages/providers/antigravity` | `@agent-runtime-gateway/provider-antigravity` | Google Antigravity ACP & Usage provider |
+| `packages/compatibility/openai`  | `@agent-runtime-gateway/compatibility-openai` | OpenAI/Composer protocol & SSE          |
+| `tests/`                         | —                                             | Root Vitest suites (HTTP, logging, env) |
 
 ## Scripts
 

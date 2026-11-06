@@ -5,7 +5,6 @@ import {
   ActiveResourceTracker,
   FilesystemSessionStore,
   InMemorySessionStore,
-  type AgentProvider,
   type SessionStore,
 } from "@agent-runtime-gateway/core";
 import {
@@ -15,6 +14,7 @@ import {
 import {
   AntigravityAuthManager,
   AntigravityProvider,
+  AntigravityUsageService,
   type AntigravityProviderOptions,
 } from "@agent-runtime-gateway/provider-antigravity";
 import { ResponseSessionStore } from "@agent-runtime-gateway/compatibility-openai";
@@ -29,6 +29,7 @@ export interface GatewayServices {
   cursorProvider: CursorProvider;
   antigravityProvider: AntigravityProvider;
   antigravityAuthManager: AntigravityAuthManager;
+  antigravityUsageService: AntigravityUsageService;
   responseStore: ResponseSessionStore;
   sessionStore: SessionStore<unknown>;
   activeResources: ActiveResourceTracker;
@@ -37,21 +38,24 @@ export interface GatewayServices {
 
 export interface GatewayServiceOptions {
   readonly antigravityProvider?: AntigravityProvider;
+  readonly antigravityUsageService?: AntigravityUsageService;
   /** Test seam: inject to assert runtime session clear without real Cursor SDK. */
   readonly cursorProvider?: CursorProvider;
   readonly sessionStore?: SessionStore<unknown>;
 }
 
 export function createGatewayServices(
-  env?: Pick<
-    Env,
-    | "RESPONSE_TTL_MS"
-    | "RESPONSE_MAX_ENTRIES"
-    | "SESSION_TTL_MS"
-    | "SESSION_STORAGE_DRIVER"
-    | "SESSION_STORAGE_PATH"
-    | "LIFECYCLE_CLEANUP_INTERVAL_MS"
-    | "CURSOR_DEFAULT_WORKING_DIRECTORY"
+  env?: Partial<
+    Pick<
+      Env,
+      | "RESPONSE_TTL_MS"
+      | "RESPONSE_MAX_ENTRIES"
+      | "SESSION_TTL_MS"
+      | "SESSION_STORAGE_DRIVER"
+      | "SESSION_STORAGE_PATH"
+      | "LIFECYCLE_CLEANUP_INTERVAL_MS"
+      | "CURSOR_DEFAULT_WORKING_DIRECTORY"
+    >
   >,
   options: GatewayServiceOptions = {},
 ): GatewayServices {
@@ -107,6 +111,8 @@ export function createGatewayServices(
   const router = new ProviderRouter(registry);
   const executor = new RuntimeExecutor(router);
   const antigravityAuthManager = new AntigravityAuthManager();
+  const antigravityUsageService =
+    options.antigravityUsageService ?? new AntigravityUsageService();
 
   const lifecycle = new RuntimeLifecycle({
     responseStore,
@@ -122,6 +128,7 @@ export function createGatewayServices(
     cursorProvider,
     antigravityProvider,
     antigravityAuthManager,
+    antigravityUsageService,
     responseStore,
     sessionStore,
     activeResources,

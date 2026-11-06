@@ -187,6 +187,73 @@ export const openApiDocument = {
           error: { type: "string", nullable: true },
         },
       },
+      AntigravityQuotaMetric: {
+        type: "object",
+        required: ["id", "nature"],
+        properties: {
+          id: { type: "string" },
+          name: { type: "string", nullable: true },
+          nature: { type: "string", enum: ["quota", "usage", "rate_limit"] },
+          used: { type: "number", nullable: true },
+          limit: { type: "number", nullable: true },
+          remaining: { type: "number", nullable: true },
+          percentage: { type: "number", nullable: true },
+          unit: { type: "string", nullable: true },
+          cycle: { type: "string", nullable: true },
+          reset_at: { type: "string", format: "date-time", nullable: true },
+          reported_at: { type: "string", format: "date-time", nullable: true },
+          scope: { type: "string", nullable: true },
+          remaining_fraction: { type: "number", nullable: true },
+          raw: { type: "object", nullable: true },
+        },
+      },
+      AntigravityUsageSnapshot: {
+        type: "object",
+        required: ["provider", "status", "source", "quotas", "fetched_at"],
+        properties: {
+          provider: { type: "string", example: "antigravity" },
+          status: {
+            type: "string",
+            enum: ["available", "unsupported", "unauthenticated", "error"],
+          },
+          source: { type: "string", example: "agy" },
+          account: {
+            type: "object",
+            nullable: true,
+            properties: {
+              email: { type: "string", nullable: true },
+              tier: { type: "string", nullable: true },
+              tier_name: { type: "string", nullable: true },
+              project: { type: "string", nullable: true },
+              gcp_managed: { type: "boolean", nullable: true },
+              upgrade_subscription_uri: { type: "string", nullable: true },
+              paid_tier: {
+                type: "object",
+                nullable: true,
+                properties: {
+                  id: { type: "string", nullable: true },
+                  name: { type: "string", nullable: true },
+                  description: { type: "string", nullable: true },
+                },
+              },
+            },
+          },
+          quotas: {
+            type: "array",
+            items: { $ref: "#/components/schemas/AntigravityQuotaMetric" },
+          },
+          reported_at: { type: "string", format: "date-time", nullable: true },
+          fetched_at: { type: "string", format: "date-time" },
+          error: {
+            type: "object",
+            nullable: true,
+            properties: {
+              code: { type: "string" },
+              message: { type: "string" },
+            },
+          },
+        },
+      },
       RuntimeSessionsClearRequest: {
         type: "object",
         required: ["namespace"],
@@ -225,15 +292,13 @@ export const openApiDocument = {
           },
           acp_close_failures: {
             type: "integer",
-            description:
-              "Antigravity only: close attempts that failed or timed out",
+            description: "Antigravity only: close attempts that failed or timed out",
             minimum: 0,
           },
           warnings: {
             type: "array",
             items: { type: "string" },
-            description:
-              "Antigravity only: non-fatal issues (timeouts, RPC errors)",
+            description: "Antigravity only: non-fatal issues (timeouts, RPC errors)",
           },
         },
       },
@@ -621,6 +686,44 @@ export const openApiDocument = {
           "401": {
             description: "Unauthorized gateway key",
             content: { "application/json": { schema: errorResponse } },
+          },
+        },
+      },
+    },
+    "/v1/providers/antigravity/usage": {
+      get: {
+        tags: ["Antigravity"],
+        summary: "Retrieve Antigravity quota and usage metrics",
+        description:
+          "Queries official Google Antigravity quotas and rate limits using local authenticated session. Requires Gateway API key authentication.",
+        responses: {
+          "200": {
+            description: "Usage and quota snapshot",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/AntigravityUsageSnapshot" },
+              },
+            },
+          },
+          "401": {
+            description: "Unauthorized gateway key",
+            content: { "application/json": { schema: errorResponse } },
+          },
+          "502": {
+            description: "Upstream provider error",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/AntigravityUsageSnapshot" },
+              },
+            },
+          },
+          "503": {
+            description: "Upstream session unauthenticated or unavailable",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/AntigravityUsageSnapshot" },
+              },
+            },
           },
         },
       },
