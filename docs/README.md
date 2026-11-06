@@ -10,13 +10,13 @@ English technical documentation for **agent-runtime-gateway**.
 
 ## Engineering
 
-| Doc                                | Purpose                                    |
-| ---------------------------------- | ------------------------------------------ |
-| [development.md](development.md)   | Workspace, scripts, quality gates, roadmap |
-| [architecture.md](architecture.md) | Packages and request flow                  |
-| [providers.md](providers.md)       | Cursor provider and credentials            |
-| [testing.md](testing.md)           | Test layers and live integration           |
-| [logging.md](logging.md)           | Pino, `X-Request-ID`, redaction rules      |
+| Doc                                | Purpose                                      |
+| ---------------------------------- | -------------------------------------------- |
+| [development.md](development.md)   | Workspace, scripts, quality gates, roadmap   |
+| [architecture.md](architecture.md) | Packages and request flow                    |
+| [providers.md](providers.md)       | Cursor and Antigravity providers/credentials |
+| [testing.md](testing.md)           | Test layers and live integration             |
+| [logging.md](logging.md)           | Pino, `X-Request-ID`, redaction rules        |
 
 ## Security & delivery
 

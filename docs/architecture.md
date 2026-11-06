@@ -2,7 +2,7 @@
 
 ## Goal
 
-Provide a **local HTTP gateway** that accepts OpenAI-compatible requests, resolves the **Cursor** runtime, runs agents via `@cursor/sdk`, and returns normalized OpenAI-style responses (including SSE streams).
+Provide a **local HTTP gateway** that accepts OpenAI-compatible requests, resolves a provider from the model ID, runs agents through the selected provider, and returns normalized OpenAI-style responses (including SSE streams).
 
 ## Request flow
 
@@ -11,16 +11,13 @@ Client (OpenAI SDK, curl, OpenCode, …)
     │
     ▼
 apps/api (Express)
-    │  auth: resolveRequestApiKey → Cursor API key
+    │  auth: gateway token; Cursor API key only on Cursor requests
     │  protocol: compatibility-openai (prepare, format, SSE)
     ▼
 RuntimeExecutor (@agent-runtime-gateway/core)
-    │  ProviderRouter → CursorProvider
-    ▼
-packages/providers/cursor
-    │  Session manager, SDK bridge, engine (Connect/protobuf port)
-    ▼
-@cursor/sdk  →  local Cursor agent (tools, workspace cwd)
+    │  ProviderRouter → CursorProvider or AntigravityProvider
+    ├─ packages/providers/cursor → @cursor/sdk and Cursor engine
+    └─ packages/providers/antigravity → agy ACP v1 stdio client → local Antigravity agent
 ```
 
 ## Packages
@@ -43,6 +40,13 @@ packages/providers/cursor
 - Contains ported **engine** and **SDK bridge** modules from composer-api (`cursor.ts`, `cursor-sdk.ts`, crypto, protobuf tool specs).
 - Uses official SDK for local agent lifecycle where applicable; engine port handles Composer-specific streaming/tool behavior.
 
+### `packages/providers/antigravity`
+
+- Implements `AgentProvider` using the isolated ACP v1 client from the Antigravity package.
+- Existing model selection uses the `antigravity:<model-id>` namespace; the HTTP request contract is unchanged.
+- Uses the local `agy` authentication store; no Google credential is passed to the provider or subprocess.
+- Gateway session affinity maps to ACP session IDs in bounded in-memory state; request-scoped ACP processes are terminated after each run.
+
 ### `packages/compatibility/openai`
 
 - OpenAI / Composer protocol: chat, completions, responses, tools, transcripts.
@@ -63,6 +67,7 @@ Native `POST /v1/agents/run` from the original gateway roadmap is **not** presen
 
 - HTTP layer: session affinity headers → gateway `sessionId`.
 - Cursor layer: `CursorSessionManager` maps session → remote `agentId`, prefers `Agent.resume`, falls back to `Agent.create`.
+- Antigravity layer: bounded in-memory mapping from gateway session → ACP session ID; each request resumes or creates the ACP session in a fresh process.
 - Responses API: `ResponseSessionStore` retains response metadata in memory (bounded store).
 
 ## Logging & observability
@@ -72,14 +77,14 @@ Native `POST /v1/agents/run` from the original gateway roadmap is **not** presen
 
 ## Security boundaries (current)
 
-- Cursor credential arrives per request or via `CURSOR_API_KEY`.
-- **No enforced gateway token** yet — see [configuration.md](configuration.md) and [security/SECURITY-AUDIT.md](security/SECURITY-AUDIT.md).
-- Default bind: loopback.
+- Cursor credential arrives per request or via `CURSOR_API_KEY` and is passed only to Cursor.
+- Antigravity reuses the local `agy` Google session and receives no Cursor or Google credential from the gateway.
+- `GATEWAY_API_TOKEN` is enforced for non-public requests when configured; without it, loopback binding is the trust boundary.
+- Default bind: loopback. Remote binds require gateway-token configuration.
 
 ## Target evolution
 
-- Enforce `GATEWAY_API_TOKEN` for HTTP while keeping Cursor keys on the provider boundary.
 - Add `POST /v1/agents/run` native contract alongside OpenAI compatibility.
-- Second provider (Antigravity) registered in the same `ProviderRegistry`.
+- Antigravity is registered in the same `ProviderRegistry`; images and OpenAI tool translation remain out of scope for the initial gateway integration.
 
 Implementation proceeds in vertical slices; see [development.md](development.md).

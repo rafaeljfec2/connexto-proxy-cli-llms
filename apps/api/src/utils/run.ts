@@ -31,3 +31,19 @@ export async function collectRunText(
 
   return fullText;
 }
+
+export async function confirmStreamingRunSuccess(
+  run: AgentRun,
+  providerId: string,
+  res: Response,
+): Promise<boolean> {
+  if (providerId !== "antigravity") {
+    return true;
+  }
+  const result = await run.wait();
+  if (result.status === "completed") {
+    return true;
+  }
+  sendUpstreamFailure(res);
+  return false;
+}

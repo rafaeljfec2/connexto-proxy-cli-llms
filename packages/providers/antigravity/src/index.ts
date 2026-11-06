@@ -1,5 +1,16 @@
 export { AntigravityAuthManager } from "./auth-manager.js";
 export {
+  AntigravityProvider,
+  type AntigravityAcpClient,
+  type AntigravityProviderOptions,
+} from "./provider.js";
+export {
+  ANTIGRAVITY_MODEL_PREFIX,
+  ANTIGRAVITY_MODELS,
+  acpModelId,
+  findAntigravityModel,
+} from "./models.js";
+export {
   AntigravityAuthError,
   AuthorizationDeniedError,
   InvalidStateError,

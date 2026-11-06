@@ -103,7 +103,7 @@ export class AcpTerminatedError extends AcpError {
 
 export class AcpTurnInProgressError extends AcpError {
   constructor() {
-    super("This ACP client already has a prompt turn in progress.");
+    super("ACP turn in progress for this session.");
     this.name = "AcpTurnInProgressError";
   }
 }

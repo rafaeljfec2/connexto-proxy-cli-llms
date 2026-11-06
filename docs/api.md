@@ -48,21 +48,23 @@ Consumers may attach continuity to provider execution with the `x-session-affini
 
 ## Interactive API docs (Swagger UI)
 
-| Method | Path           | Gateway auth | Description                                      |
-| ------ | -------------- | ------------ | ------------------------------------------------ |
-| `GET`  | `/docs`        | No           | Swagger UI for trying endpoints from the browser |
-| `GET`  | `/openapi.json`| No           | OpenAPI 3.0 document                             |
+| Method | Path            | Gateway auth | Description                                      |
+| ------ | --------------- | ------------ | ------------------------------------------------ |
+| `GET`  | `/docs`         | No           | Swagger UI for trying endpoints from the browser |
+| `GET`  | `/openapi.json` | No           | OpenAPI 3.0 document                             |
 
 Register **Authorize** with `X-Gateway-API-Key` (when configured) and **Bearer** / `x-api-key` for the Cursor credential before calling protected routes. Docs are registered before gateway auth (intended for local development on loopback).
 
 ## Models
 
-| Method | Path                | Gateway auth | Description                                |
-| ------ | ------------------- | ------------ | ------------------------------------------ |
-| `GET`  | `/v1/models`        | No           | OpenAI-style model list (Composer catalog) |
-| `GET`  | `/v1/models/:model` | No           | Single model object or 404                 |
+| Method | Path                | Gateway auth | Description                                                 |
+| ------ | ------------------- | ------------ | ----------------------------------------------------------- |
+| `GET`  | `/v1/models`        | No           | OpenAI-style model list (Composer and Antigravity catalogs) |
+| `GET`  | `/v1/models/:model` | No           | Single model object or 404                                  |
 
-Catalog includes ids such as `composer-2.5`, `composer-2.5-fast`, and Grok aliases — see `@agent-runtime-gateway/compatibility-openai` `models.ts`.
+The catalog includes Composer/Grok ids and namespaced Antigravity ids such as `antigravity:gemini-3.8-flash` and `antigravity:claude-sonnet-4-6`. Antigravity IDs use the colon namespace so they remain one `/v1/models/:model` path segment.
+
+Provider selection uses the existing `model` field. Unprefixed Composer/Grok models continue to use Cursor; `antigravity:<model-id>` routes to the local ACP provider. This changes no route, request field, header, or response schema. Antigravity requests still follow gateway authorization, but do not require a Cursor API key.
 
 ## Chat Completions
 
@@ -81,6 +83,8 @@ Catalog includes ids such as `composer-2.5`, `composer-2.5-fast`, and Grok alias
 ```
 
 **Stream:** set `"stream": true` — response is `text/event-stream` with OpenAI-style chunks and `[DONE]`.
+
+The same provider selection applies to existing `POST /v1/completions`, `POST /v1/responses`, and `POST /v1/responses/compact` execution. The initial Antigravity integration is text-only; image blocks and OpenAI tool definitions for Antigravity models return `unsupported_parameter`. Cursor requests retain their existing behavior.
 
 Successful JSON responses may include extension fields (e.g. `cursor_run_id`) in addition to standard OpenAI fields.
 

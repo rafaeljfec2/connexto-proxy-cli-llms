@@ -3,9 +3,13 @@ import {
   ProviderRouter,
   RuntimeExecutor,
   ActiveResourceTracker,
+  type AgentProvider,
 } from "@agent-runtime-gateway/core";
 import { CursorProvider } from "@agent-runtime-gateway/provider-cursor";
-import { AntigravityAuthManager } from "@agent-runtime-gateway/provider-antigravity";
+import {
+  AntigravityAuthManager,
+  AntigravityProvider,
+} from "@agent-runtime-gateway/provider-antigravity";
 import { ResponseSessionStore } from "@agent-runtime-gateway/compatibility-openai";
 import type { Env } from "../config/env.js";
 import {
@@ -16,10 +20,15 @@ import {
 export interface GatewayServices {
   executor: RuntimeExecutor;
   cursorProvider: CursorProvider;
+  antigravityProvider: AgentProvider;
   antigravityAuthManager: AntigravityAuthManager;
   responseStore: ResponseSessionStore;
   activeResources: ActiveResourceTracker;
   lifecycle: RuntimeLifecycle;
+}
+
+export interface GatewayServiceOptions {
+  readonly antigravityProvider?: AgentProvider;
 }
 
 export function createGatewayServices(
@@ -31,6 +40,7 @@ export function createGatewayServices(
     | "LIFECYCLE_CLEANUP_INTERVAL_MS"
     | "CURSOR_DEFAULT_WORKING_DIRECTORY"
   >,
+  options: GatewayServiceOptions = {},
 ): GatewayServices {
   const activeResources = new ActiveResourceTracker();
   const responseStore = new ResponseSessionStore({
@@ -60,7 +70,14 @@ export function createGatewayServices(
 
   const registry = new ProviderRegistry();
   const cursorProvider = new CursorProvider(cursorProviderOptions);
+  const antigravityProvider =
+    options.antigravityProvider ??
+    new AntigravityProvider({
+      defaultWorkingDirectory: env?.CURSOR_DEFAULT_WORKING_DIRECTORY,
+      sessionOptions: { ttlMs: env?.SESSION_TTL_MS },
+    });
   registry.register(cursorProvider);
+  registry.register(antigravityProvider);
 
   const router = new ProviderRouter(registry);
   const executor = new RuntimeExecutor(router);
@@ -78,6 +95,7 @@ export function createGatewayServices(
   return {
     executor,
     cursorProvider,
+    antigravityProvider,
     antigravityAuthManager,
     responseStore,
     activeResources,
@@ -94,8 +112,9 @@ export function getGatewayServices(): GatewayServices {
 
 export function initializeGatewayServices(
   env: Parameters<typeof createGatewayServices>[0],
+  options: GatewayServiceOptions = {},
 ): GatewayServices {
-  defaultServices = createGatewayServices(env);
+  defaultServices = createGatewayServices(env, options);
   return defaultServices;
 }
 

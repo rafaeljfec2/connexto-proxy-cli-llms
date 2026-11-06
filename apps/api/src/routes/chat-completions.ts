@@ -1,4 +1,4 @@
-import { collectRunText } from "../utils/run.js";
+import { collectRunText, confirmStreamingRunSuccess } from "../utils/run.js";
 import crypto from "node:crypto";
 import { performance } from "node:perf_hooks";
 import type { Express, Request, Response } from "express";
@@ -10,7 +10,6 @@ import {
   HttpError,
   openAiErrorPayload,
   prepareChatRequest,
-  resolveCursorModel,
 } from "@agent-runtime-gateway/compatibility-openai";
 import { getGatewayServices } from "../services/gateway.js";
 import { resolveRequestApiKey } from "../utils/auth.js";
@@ -20,6 +19,11 @@ import { initSseHeaders } from "../utils/sse.js";
 import { getLogger } from "../utils/logger.js";
 import { sendHttpError } from "../utils/error-handler.js";
 import { createRequestCancellation } from "../utils/request-cancellation.js";
+import {
+  assertAntigravityTextOnly,
+  providerCredential,
+  resolveProviderTarget,
+} from "../utils/provider-target.js";
 
 export function registerChatCompletionRoutes(app: Express): void {
   app.post(
@@ -39,7 +43,9 @@ export function registerChatCompletionRoutes(app: Express): void {
         };
         const requestedModel =
           typeof body?.model === "string" ? body.model : "composer-2.5";
-        const cursorModel = resolveCursorModel(requestedModel);
+        const target = resolveProviderTarget(requestedModel);
+        const cursorModel =
+          target.providerId === "cursor" ? { id: target.modelId } : undefined;
 
         let prepared;
         try {
@@ -57,13 +63,14 @@ export function registerChatCompletionRoutes(app: Express): void {
           return;
         }
 
-        const apiKey = resolveRequestApiKey(req);
-        if (!apiKey) {
-          res
-            .status(401)
-            .json(openAiErrorPayload("Missing Cursor API key", "unauthorized"));
-          return;
-        }
+        assertAntigravityTextOnly(
+          target,
+          prepared.prompt.images?.length ?? 0,
+          prepared.tools.length,
+        );
+
+        const apiKey =
+          target.providerId === "cursor" ? resolveRequestApiKey(req) : undefined;
 
         const principal = resolveRequestPrincipal(res.locals);
         if (principal === undefined) {
@@ -74,6 +81,7 @@ export function registerChatCompletionRoutes(app: Express): void {
             );
           return;
         }
+        const credential = providerCredential(target, apiKey);
 
         const id = `chatcmpl_${crypto.randomUUID().replaceAll("-", "")}`;
         const created = Math.floor(Date.now() / 1000);
@@ -81,11 +89,11 @@ export function registerChatCompletionRoutes(app: Express): void {
 
         const services = getGatewayServices();
         const providerStart = performance.now();
-        const run = await services.executor.execute("cursor", {
+        const run = await services.executor.execute(target.providerId, {
           sessionId: sessionAffinity,
-          model: cursorModel.id,
+          model: target.modelId,
           message: prepared.prompt.text,
-          credential: { type: "api_key", value: apiKey },
+          credential,
           signal: cancellation.signal,
         });
 
@@ -115,14 +123,17 @@ export function registerChatCompletionRoutes(app: Express): void {
           }
 
           if (cancellation.signal.aborted) return;
+          if (!(await confirmStreamingRunSuccess(run, target.providerId, res))) {
+            return;
+          }
           const providerDurationMs =
             Math.round((performance.now() - providerStart) * 100) / 100;
 
           getLogger().info(
             {
               requestId,
-              provider: "cursor",
-              model: cursorModel.id,
+              provider: target.providerId,
+              model: target.modelId,
               status: "completed",
               durationMs: providerDurationMs,
               timeToFirstDeltaMs: firstDeltaMs ?? providerDurationMs,
@@ -166,8 +177,8 @@ export function registerChatCompletionRoutes(app: Express): void {
           getLogger().warn(
             {
               requestId,
-              provider: "cursor",
-              model: cursorModel.id,
+              provider: target.providerId,
+              model: target.modelId,
               status: "failed",
               durationMs: providerDurationMs,
             },
@@ -179,8 +190,8 @@ export function registerChatCompletionRoutes(app: Express): void {
         getLogger().info(
           {
             requestId,
-            provider: "cursor",
-            model: cursorModel.id,
+            provider: target.providerId,
+            model: target.modelId,
             status: "completed",
             durationMs: providerDurationMs,
           },
@@ -193,9 +204,9 @@ export function registerChatCompletionRoutes(app: Express): void {
           model: prepared.model,
           text: fullText,
           promptChars: prepared.promptChars,
-          metadata: {
-            cursor_run_id: run.id,
-          },
+          ...(target.providerId === "cursor"
+            ? { metadata: { cursor_run_id: run.id } }
+            : {}),
         });
 
         res.status(200).json(response);

@@ -4,7 +4,7 @@
 
 Providers implement `@agent-runtime-gateway/core` **`AgentProvider`**. The HTTP app registers providers on a **`ProviderRegistry`** and executes through **`RuntimeExecutor`**.
 
-Today only **Cursor** is registered (`apps/api/src/services/gateway.ts`).
+**Cursor** and **Antigravity** are registered in `apps/api/src/services/gateway.ts`.
 
 ## Cursor — `@agent-runtime-gateway/provider-cursor`
 
@@ -51,9 +51,33 @@ export CURSOR_API_KEY=...
 pnpm --filter @agent-runtime-gateway/provider-cursor test:integration
 ```
 
-## Antigravity
+## Antigravity — `@agent-runtime-gateway/provider-antigravity`
 
-Not implemented (roadmap phase 7). A future provider would register alongside Cursor without changing core contracts.
+### Capabilities
+
+- Implements `AgentProvider` using the official `agy acp` CLI over ACP v1 stdio.
+- Existing OpenAI-compatible execution routes select this provider through namespaced model IDs in the existing `model` field: `antigravity:<model-id>`.
+- The provider starts `agy` from `PATH` or `~/.gemini/bin/agy`; `AGY_PATH` can override the executable path.
+- `/v1/models` exposes the verified namespaced models: `antigravity:gemini-3.8-flash`, `antigravity:claude-sonnet-4-6`, `antigravity:claude-opus-4-6-thinking`, and `antigravity:gpt-oss-120b-medium`.
+- Gateway session affinity maps to an ACP session ID in bounded in-memory state. Each execution uses a request-scoped ACP process, resumes or creates the ACP session, streams message deltas, and terminates the process after completion or cancellation.
+- The provider is registered alongside Cursor in the same `ProviderRegistry`; no HTTP route, request field, header, or response shape is added.
+
+### Credentials
+
+- Gateway HTTP authentication follows the existing gateway middleware policy.
+- Antigravity execution does not require a Cursor API key. The official CLI reuses its locally authenticated Google session through ACP `authenticate { methodId: "oauth-personal" }` when required.
+- Google credentials are not read by the provider, exported to the process, transported over ACP, or logged. The subprocess inherits only operational environment variables; per-client explicit environment overrides remain available.
+
+### Limitations
+
+- The initial gateway integration supports text prompts. Image blocks and OpenAI tool definitions are rejected for Antigravity model IDs; Cursor behavior is unchanged.
+- The gateway-to-ACP session mapping is in memory and does not survive an API process restart. ACP session history remains under the local `agy` CLI's control.
+- Models are a static catalog of the values verified against `agy` 1.5.1. Update the catalog when supported agent configuration values change.
+
+### Validation
+
+- Offline provider and gateway tests use the ACP fixture and require no Google or Cursor credentials.
+- Real `agy` tests are opt-in with `RUN_ANTIGRAVITY_ACP_TESTS=1`; they reuse the local Google session and can consume provider quota.
 
 ## Adding another provider
 

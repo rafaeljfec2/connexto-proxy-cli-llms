@@ -2,6 +2,7 @@ import fs from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, describe, expect, it } from "vitest";
+import { AntigravityProvider } from "@agent-runtime-gateway/provider-antigravity";
 import {
   AGY_CLI_PATH_ENV,
   ACP_PROTOCOL_VERSION,
@@ -90,6 +91,32 @@ describe.skipIf(!(RUN_REAL && agyPath !== undefined))(
 
         await client.terminate();
         expect(client.isConnected).toBe(false);
+      },
+      SPIKE_TIMEOUT,
+    );
+
+    it(
+      "executes a gateway AgentRun through the real Antigravity provider",
+      async () => {
+        const cwd = ensureWorkspace();
+        const provider = new AntigravityProvider({ defaultWorkingDirectory: cwd });
+        const run = await provider.execute({
+          credential: { type: "local", value: "" },
+          model: "antigravity:gemini-3.8-flash",
+          sessionId: `real-provider-${Date.now()}`,
+          message: "Reply with exactly CONNEXO-ACP-PROVIDER-OK and nothing else.",
+          workingDirectory: cwd,
+        });
+        const events: string[] = [];
+        for await (const event of run.events) {
+          events.push(event.type);
+        }
+        const result = await run.wait();
+
+        expect(result.status).toBe("completed");
+        expect(result.output?.text).toContain("CONNEXO-ACP-PROVIDER-OK");
+        expect(events).toContain("message.delta");
+        expect(events).toContain("run.completed");
       },
       SPIKE_TIMEOUT,
     );

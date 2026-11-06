@@ -93,7 +93,7 @@ await request(app).get("/health");
 | 4 — Gateway auth         | Done    | Separate gateway token; remote binds require configuration   |
 | 5 — Sessions             | Partial | Session affinity headers + Cursor resume                     |
 | 6 — Streaming            | Done    | SSE on chat/responses                                        |
-| 7 — Antigravity          | Open    | Second provider                                              |
+| 7 — Antigravity          | Done    | ACP v1 provider, registered and routed via namespaced models |
 | 8 — OpenAI clients       | Done    | `packages/compatibility/openai` + Express routes             |
 
 Delivery evidence: [reports/](reports/).
