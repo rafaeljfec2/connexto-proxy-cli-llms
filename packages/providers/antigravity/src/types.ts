@@ -62,6 +62,7 @@ export interface AntigravityTokens {
 
 export type AntigravityTokenExchanger = (params: {
   readonly clientId: string;
+  readonly clientSecret?: string;
   readonly code: string;
   readonly codeVerifier: string;
   readonly redirectUri: string;

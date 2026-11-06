@@ -1,3 +1,5 @@
+import os from "node:os";
+import path from "node:path";
 import {
   ProviderRegistry,
   ProviderRouter,
@@ -57,6 +59,7 @@ export function createGatewayServices(
       | "SESSION_STORAGE_PATH"
       | "LIFECYCLE_CLEANUP_INTERVAL_MS"
       | "CURSOR_DEFAULT_WORKING_DIRECTORY"
+      | "ANTIGRAVITY_STORAGE_PATH"
     >
   >,
   options: GatewayServiceOptions = {},
@@ -96,6 +99,10 @@ export function createGatewayServices(
       env.CURSOR_DEFAULT_WORKING_DIRECTORY;
   }
 
+  const antigravityStoragePath =
+    env?.ANTIGRAVITY_STORAGE_PATH ??
+    path.join(os.homedir(), ".connexto-proxy", "antigravity");
+
   const registry = new ProviderRegistry();
   const cursorProvider =
     options.cursorProvider ?? new CursorProvider(cursorProviderOptions);
@@ -103,6 +110,7 @@ export function createGatewayServices(
     defaultWorkingDirectory: env?.CURSOR_DEFAULT_WORKING_DIRECTORY,
     sessionOptions: { ttlMs: env?.SESSION_TTL_MS },
     sessionStore: sessionStore as unknown as AntigravityProviderOptions["sessionStore"],
+    homeDir: antigravityStoragePath,
   };
   const antigravityProvider =
     options.antigravityProvider ?? new AntigravityProvider(antigravityOptions);
@@ -113,9 +121,11 @@ export function createGatewayServices(
   const router = new ProviderRouter(registry);
   const executor = new RuntimeExecutor(router);
   const antigravityAuthManager =
-    options.antigravityAuthManager ?? new AntigravityAuthManager();
+    options.antigravityAuthManager ??
+    new AntigravityAuthManager({ homeDir: antigravityStoragePath });
   const antigravityUsageService =
-    options.antigravityUsageService ?? new AntigravityUsageService();
+    options.antigravityUsageService ??
+    new AntigravityUsageService({ homeDir: antigravityStoragePath });
 
   const lifecycle = new RuntimeLifecycle({
     responseStore,

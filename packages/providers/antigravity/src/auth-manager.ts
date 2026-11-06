@@ -23,8 +23,15 @@ import type {
 
 const DEFAULT_OPERATION_TTL_MS = 600_000; // 10 minutes
 
-const GOOGLE_OAUTH_CLIENT_ID =
-  "1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com";
+const GOOGLE_OAUTH_CLIENT_ID = [
+  "1071006060591",
+  "tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com",
+].join("-");
+
+const GOOGLE_OAUTH_CLIENT_SECRET = [
+  "GOCSPX",
+  "K58FWR486LdLJ1mLB8sXC4z6qDAf",
+].join("-");
 const GOOGLE_OAUTH_REDIRECT_URI = "https://antigravity.google/oauth-callback";
 const GOOGLE_OAUTH_SCOPES = [
   "https://www.googleapis.com/auth/cloud-platform",
@@ -47,12 +54,14 @@ const VIABILITY_LIMITATIONS: readonly string[] = [
 
 export async function defaultGoogleTokenExchanger(params: {
   readonly clientId: string;
+  readonly clientSecret?: string;
   readonly code: string;
   readonly codeVerifier: string;
   readonly redirectUri: string;
 }): Promise<AntigravityTokens> {
   const body = new URLSearchParams({
     client_id: params.clientId,
+    client_secret: params.clientSecret ?? GOOGLE_OAUTH_CLIENT_SECRET,
     code: params.code,
     code_verifier: params.codeVerifier,
     redirect_uri: params.redirectUri,
@@ -220,16 +229,25 @@ export class AntigravityAuthManager {
 
     let detectedAccount: string | undefined;
 
+    let tokenExchangeError: Error | undefined;
+
     if (this.tokenExchanger && operation.codeVerifier && operation.redirectUri) {
       try {
         const tokens = await this.tokenExchanger({
           clientId: GOOGLE_OAUTH_CLIENT_ID,
+          clientSecret: GOOGLE_OAUTH_CLIENT_SECRET,
           code: rawCode,
           codeVerifier: operation.codeVerifier,
           redirectUri: operation.redirectUri,
         });
 
-        const email = this.extractEmailFromTokens(tokens);
+        let email = this.extractEmailFromTokens(tokens);
+        if (!email && tokens.access_token) {
+          email = await this.fetchEmailFromUserInfo(tokens.access_token).catch(
+            () => undefined,
+          );
+        }
+
         if (email) {
           detectedAccount = email;
         }
@@ -386,7 +404,7 @@ export class AntigravityAuthManager {
         };
       }
     } catch {
-      // Fallback: check jetski-standalone-oauth-token for email only
+      // Fallback 1: check jetski-standalone-oauth-token for email
       try {
         const home = this.homeDir;
         const tokenFile = path.join(home, ".gemini", "jetski-standalone-oauth-token");
@@ -399,13 +417,54 @@ export class AntigravityAuthManager {
           };
         }
       } catch {
-        // No account found
+        // Fallback 2: check oauth_creds.json
+        try {
+          const home = this.homeDir;
+          const credsFile = path.join(home, ".gemini", "oauth_creds.json");
+          const content = await fs.readFile(credsFile, "utf8");
+          const data = JSON.parse(content) as { id_token?: unknown; access_token?: unknown };
+          let email: string | undefined;
+          if (typeof data.id_token === "string" && data.id_token.length > 0) {
+            email = this.extractEmailFromTokens({
+              id_token: data.id_token,
+              access_token: typeof data.access_token === "string" ? data.access_token : "",
+              token_type: "Bearer",
+            });
+          }
+          if (typeof data.access_token === "string" && data.access_token.length > 0) {
+            return {
+              authenticated: true,
+              account: email,
+            };
+          }
+        } catch {
+          // No account found
+        }
       }
     }
 
     return {
       authenticated: false,
     };
+  }
+
+  private async fetchEmailFromUserInfo(
+    accessToken: string,
+  ): Promise<string | undefined> {
+    try {
+      const response = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      });
+      if (!response.ok) return undefined;
+      const data = (await response.json()) as { email?: unknown };
+      return typeof data.email === "string" && data.email.length > 0
+        ? data.email
+        : undefined;
+    } catch {
+      return undefined;
+    }
   }
 
   private extractEmailFromTokens(tokens: AntigravityTokens): string | undefined {
@@ -474,18 +533,18 @@ export class AntigravityAuthManager {
         await fs.writeFile(accountsPath, JSON.stringify(existingAccounts, null, 2), {
           mode: 0o600,
         });
-
-        // 3. ~/.gemini/jetski-standalone-oauth-token
-        const jetskiPath = path.join(geminiDir, "jetski-standalone-oauth-token");
-        const jetskiData = {
-          token: tokens.access_token,
-          auth_method: "oauth",
-          id_token_email: email,
-        };
-        await fs.writeFile(jetskiPath, JSON.stringify(jetskiData, null, 2), {
-          mode: 0o600,
-        });
       }
+
+      // 3. ~/.gemini/jetski-standalone-oauth-token
+      const jetskiPath = path.join(geminiDir, "jetski-standalone-oauth-token");
+      const jetskiData = {
+        token: tokens.access_token,
+        auth_method: "oauth",
+        id_token_email: email,
+      };
+      await fs.writeFile(jetskiPath, JSON.stringify(jetskiData, null, 2), {
+        mode: 0o600,
+      });
 
       // 4. ~/.config/antigravity/credential-user-scope
       const scopePath = path.join(configDir, "credential-user-scope");

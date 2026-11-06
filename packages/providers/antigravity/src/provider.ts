@@ -86,6 +86,7 @@ const ACP_CLOSE_SESSION_TIMEOUT_MS = 15_000;
 export interface AntigravityProviderOptions {
   readonly clientFactory?: (cwd: string) => AntigravityAcpClient;
   readonly defaultWorkingDirectory?: string;
+  readonly homeDir?: string;
   readonly cancelGraceMs?: number;
   readonly sessionOptions?: AntigravitySessionStoreOptions;
   readonly sessionStore?:
@@ -104,12 +105,15 @@ export class AntigravityProvider implements AgentProvider {
 
   private readonly clientFactory: (cwd: string) => AntigravityAcpClient;
   private readonly defaultWorkingDirectory: string;
+  private readonly homeDir?: string;
   private readonly cancelGraceMs: number;
   private readonly sessions: AntigravitySessionStore;
   private readonly activeSessions = new Set<string>();
 
   constructor(options: AntigravityProviderOptions = {}) {
-    this.clientFactory = options.clientFactory ?? createDefaultClient;
+    this.homeDir = options.homeDir;
+    this.clientFactory =
+      options.clientFactory ?? ((cwd: string) => createDefaultClient(cwd, this.homeDir));
     this.defaultWorkingDirectory = options.defaultWorkingDirectory ?? process.cwd();
     this.cancelGraceMs = options.cancelGraceMs ?? DEFAULT_CANCEL_GRACE_MS;
     this.sessions = new AntigravitySessionStore({
@@ -335,10 +339,17 @@ export class AntigravityProvider implements AgentProvider {
   }
 }
 
-function createDefaultClient(cwd: string): AntigravityAcpClient {
+function createDefaultClient(cwd: string, homeDir?: string): AntigravityAcpClient {
+  const env = homeDir
+    ? {
+        HOME: homeDir,
+        ANTIGRAVITY_APP_DATA_DIR: homeDir,
+      }
+    : undefined;
   return new AcpClient({
     command: resolveAgyCommand(),
     cwd,
+    env,
     clientInfo: DEFAULT_CLIENT_INFO,
     authMethodId: DEFAULT_AUTH_METHOD_ID,
     timeouts: { processGraceMs: DEFAULT_PROCESS_GRACE_MS },

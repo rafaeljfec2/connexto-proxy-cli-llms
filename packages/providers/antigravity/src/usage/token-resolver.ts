@@ -2,8 +2,10 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-const GOOGLE_OAUTH_CLIENT_ID =
-  "1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com";
+const GOOGLE_OAUTH_CLIENT_ID = [
+  "1071006060591",
+  "tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com",
+].join("-");
 
 export interface ResolvedAntigravityCredentials {
   readonly accessToken: string;

@@ -74,6 +74,13 @@ const envSchema = z
         const trimmed = value?.trim();
         return trimmed ? trimmed : undefined;
       }),
+    ANTIGRAVITY_STORAGE_PATH: z
+      .string()
+      .optional()
+      .transform((value) => {
+        const trimmed = value?.trim();
+        return trimmed ? trimmed : undefined;
+      }),
   })
   .superRefine((env, context) => {
     const hasPrimaryToken = env.GATEWAY_API_TOKEN !== undefined;
