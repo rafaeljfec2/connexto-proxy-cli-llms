@@ -3,6 +3,7 @@ export {
   AntigravityProvider,
   type AntigravityAcpClient,
   type AntigravityProviderOptions,
+  type AntigravityRuntimeSessionClearReport,
 } from "./provider.js";
 export {
   ANTIGRAVITY_MODEL_PREFIX,

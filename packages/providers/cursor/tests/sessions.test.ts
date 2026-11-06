@@ -33,4 +33,38 @@ describe("CursorSessionManager", () => {
     expect(createLocalAgent).toHaveBeenCalledTimes(1);
     expect(resumeLocalAgent).toHaveBeenCalledTimes(1);
   });
+
+  it("clearInMemorySessionCache forces a new agent on next acquire with same id", async () => {
+    const agent = {
+      agentId: "agent-1",
+      send: vi.fn(),
+      close: vi.fn(),
+    };
+
+    const createLocalAgent = vi.fn(() => Promise.resolve(agent as never));
+    const resumeLocalAgent = vi.fn(() => Promise.resolve(agent as never));
+
+    const client: CursorClient = {
+      listModels: vi.fn(),
+      createLocalAgent,
+      resumeLocalAgent,
+    };
+
+    const sessions = new CursorSessionManager(client);
+    const params = {
+      apiKey: "key",
+      model: "composer-2.5",
+      name: "test",
+      workingDirectory: process.cwd(),
+    };
+
+    await sessions.acquireAgent("session-b", params);
+    expect(createLocalAgent).toHaveBeenCalledTimes(1);
+
+    sessions.clearInMemorySessionCache();
+
+    await sessions.acquireAgent("session-b", params);
+    expect(createLocalAgent).toHaveBeenCalledTimes(2);
+    expect(resumeLocalAgent).not.toHaveBeenCalled();
+  });
 });

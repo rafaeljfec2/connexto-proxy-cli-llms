@@ -119,6 +119,40 @@ export class AntigravitySessionStore {
     return existedInMemory || existedInStore;
   }
 
+  /**
+   * All distinct ACP session ids currently mapped (in-memory and persisted).
+   * Used before clearing the namespace so the gateway can call session/close upstream.
+   */
+  public async listAllAcpSessionIds(): Promise<string[]> {
+    const seen = new Set<string>();
+    for (const record of this.sessions.values()) {
+      seen.add(record.acpSessionId);
+    }
+    if (this.store !== undefined) {
+      try {
+        const keys = await this.store.list();
+        for (const key of keys) {
+          const rec = await this.store.get(key);
+          if (rec !== undefined) {
+            seen.add(rec.acpSessionId);
+          }
+        }
+      } catch {
+        // Best effort — proceed with whatever we collected from memory
+      }
+    }
+    return [...seen];
+  }
+
+  /**
+   * Drops every in-memory gateway→ACP mapping. Call after the shared SessionStore
+   * namespace was cleared on disk (e.g. POST /v1/runtime/sessions/clear) so the next
+   * request does not resume a stale ACP session from this process cache.
+   */
+  public clearInMemory(): void {
+    this.sessions.clear();
+  }
+
   private removeExpired(now: number): void {
     for (const [gatewaySessionId, record] of this.sessions) {
       if (now - record.touchedAt > this.ttlMs) {

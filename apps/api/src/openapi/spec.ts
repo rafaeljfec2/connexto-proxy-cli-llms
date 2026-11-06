@@ -205,6 +205,36 @@ export const openApiDocument = {
         properties: {
           cleared: { type: "boolean", example: true },
           namespace: { type: "string", example: "cursor" },
+          mapped_acp_ids_count: {
+            type: "integer",
+            description:
+              "Antigravity only: distinct ACP session ids found in the gateway session map before disk clear",
+            minimum: 0,
+          },
+          listed_acp_sessions_count: {
+            type: "integer",
+            description:
+              "Antigravity only: sessions returned by ACP session/list before closing",
+            minimum: 0,
+          },
+          acp_sessions_closed: {
+            type: "integer",
+            description:
+              "Antigravity only: distinct ACP sessions closed via session/close",
+            minimum: 0,
+          },
+          acp_close_failures: {
+            type: "integer",
+            description:
+              "Antigravity only: close attempts that failed or timed out",
+            minimum: 0,
+          },
+          warnings: {
+            type: "array",
+            items: { type: "string" },
+            description:
+              "Antigravity only: non-fatal issues (timeouts, RPC errors)",
+          },
         },
       },
     },
@@ -416,7 +446,7 @@ export const openApiDocument = {
         tags: ["Runtime"],
         summary: "Clear persisted sessions for a provider namespace",
         description:
-          "Deletes all JSON session files for the given namespace under SESSION_STORAGE_PATH (filesystem driver). Requires gateway authentication when configured. Does not remove Antigravity OAuth files under ~/.gemini or ~/.config/antigravity.",
+          "Deletes all JSON session files for the given namespace under SESSION_STORAGE_PATH (filesystem driver). For antigravity, also attempts to close live ACP sessions via session/close after session/list, then clears gateway caches. Requires gateway authentication when configured. Does not remove Antigravity OAuth files under ~/.gemini or ~/.config/antigravity.",
         requestBody: {
           required: true,
           content: {

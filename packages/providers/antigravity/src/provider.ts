@@ -26,6 +26,7 @@ import {
 import type {
   AgentTurnResult,
   ContentBlock,
+  ListSessionsResult,
   RunAgentTurnOptions,
   SessionConfigOption,
 } from "./acp/index.js";
@@ -53,6 +54,7 @@ export interface AntigravityAcpClient {
     cwd: string,
     mcpServers?: unknown[],
   ): Promise<Record<string, unknown>>;
+  listSessions(): Promise<ListSessionsResult>;
   setSessionConfig(
     sessionId: string,
     configId: string,
@@ -64,8 +66,22 @@ export interface AntigravityAcpClient {
     options?: RunAgentTurnOptions,
   ): Promise<AgentTurnResult>;
   cancelTurn(sessionId: string): void;
+  closeSession(sessionId: string): Promise<void>;
   terminate(): Promise<void>;
 }
+
+/** Populated in POST /v1/runtime/sessions/clear when namespace is antigravity. */
+export interface AntigravityRuntimeSessionClearReport {
+  readonly mapped_acp_ids_count: number;
+  readonly listed_acp_sessions_count: number;
+  readonly acp_sessions_closed: number;
+  readonly acp_close_failures: number;
+  readonly warnings: readonly string[];
+}
+
+const ACP_CONNECT_TIMEOUT_MS = 20_000;
+const ACP_LIST_SESSIONS_TIMEOUT_MS = 15_000;
+const ACP_CLOSE_SESSION_TIMEOUT_MS = 15_000;
 
 export interface AntigravityProviderOptions {
   readonly clientFactory?: (cwd: string) => AntigravityAcpClient;
@@ -104,6 +120,34 @@ export class AntigravityProvider implements AgentProvider {
 
   public listModels(): Promise<Model[]> {
     return Promise.resolve(ANTIGRAVITY_MODELS.map((model) => ({ ...model })));
+  }
+
+  /**
+   * Step 1 of runtime clear: close ACP sessions upstream — first by persisted
+   * gateway→ACP map, then by `session/list` and `session/close` for anything
+   * still live in the local runtime. Returns a verifiable report.
+   */
+  public async closePersistedAcpSessions(): Promise<AntigravityRuntimeSessionClearReport> {
+    let mappedIds: string[];
+    try {
+      mappedIds = await this.sessions.listAllAcpSessionIds();
+    } catch {
+      mappedIds = [];
+    }
+    return closeAntigravityAcpSessionsWithReport(
+      mappedIds,
+      this.defaultWorkingDirectory,
+      this.clientFactory,
+    );
+  }
+
+  /**
+   * Step 2 of runtime clear: drop in-memory gateway→ACP maps and execution locks
+   * after `sessionStore.clear("antigravity")` removed JSON on disk.
+   */
+  public clearSessionCaches(): void {
+    this.sessions.clearInMemory();
+    this.activeSessions.clear();
   }
 
   public async execute(input: AgentExecutionInput): Promise<AgentRun> {
@@ -318,6 +362,146 @@ function resolveWorkingDirectory(
 ): string {
   const candidate = requestedDirectory?.trim() || defaultDirectory;
   return path.resolve(candidate);
+}
+
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error(`${label} timed out after ${ms}ms`));
+    }, ms);
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error: unknown) => {
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
+
+async function safeTerminate(client: AntigravityAcpClient): Promise<void> {
+  try {
+    await client.terminate();
+  } catch {
+    // ignore
+  }
+}
+
+async function closeAntigravityAcpSessionsWithReport(
+  mappedAcpSessionIds: readonly string[],
+  defaultWorkingDirectory: string,
+  clientFactory: (cwd: string) => AntigravityAcpClient,
+): Promise<AntigravityRuntimeSessionClearReport> {
+  const cwd = resolveWorkingDirectory(undefined, defaultWorkingDirectory);
+  const warnings: string[] = [];
+  const closedIds = new Set<string>();
+  let closeFailures = 0;
+
+  const dedupedMapped = [
+    ...new Set(
+      mappedAcpSessionIds.map((id) => id.trim()).filter((id) => id.length > 0),
+    ),
+  ];
+
+  const mapClient = clientFactory(cwd);
+  try {
+    await withTimeout(mapClient.connect(), ACP_CONNECT_TIMEOUT_MS, "connect");
+    for (const sessionId of dedupedMapped) {
+      try {
+        await withTimeout(
+          mapClient.closeSession(sessionId),
+          ACP_CLOSE_SESSION_TIMEOUT_MS,
+          "closeSession",
+        );
+        closedIds.add(sessionId);
+      } catch (error) {
+        closeFailures += 1;
+        warnings.push(
+          `mapped close failed for ${sessionId}: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+    }
+  } catch (error) {
+    warnings.push(
+      `connect for mapped closes failed: ${error instanceof Error ? error.message : String(error)}`,
+    );
+    closeFailures += dedupedMapped.length;
+  } finally {
+    await safeTerminate(mapClient);
+  }
+
+  const listClient = clientFactory(cwd);
+  let listedCount = 0;
+  try {
+    await withTimeout(listClient.connect(), ACP_CONNECT_TIMEOUT_MS, "connect");
+  } catch (error) {
+    warnings.push(
+      `connect for session/list failed: ${error instanceof Error ? error.message : String(error)}`,
+    );
+    await safeTerminate(listClient);
+    return {
+      mapped_acp_ids_count: dedupedMapped.length,
+      listed_acp_sessions_count: 0,
+      acp_sessions_closed: closedIds.size,
+      acp_close_failures: closeFailures,
+      warnings,
+    };
+  }
+
+  let listed: ListSessionsResult;
+  try {
+    listed = await withTimeout(
+      listClient.listSessions(),
+      ACP_LIST_SESSIONS_TIMEOUT_MS,
+      "listSessions",
+    );
+  } catch (error) {
+    warnings.push(
+      `listSessions failed: ${error instanceof Error ? error.message : String(error)}`,
+    );
+    listed = { sessions: [] };
+  }
+
+  const fromList = [
+    ...new Set(
+      listed.sessions
+        .map((s) => (typeof s.sessionId === "string" ? s.sessionId.trim() : ""))
+        .filter((id) => id.length > 0),
+    ),
+  ];
+  listedCount = fromList.length;
+
+  for (const sessionId of fromList) {
+    if (closedIds.has(sessionId)) {
+      continue;
+    }
+    try {
+      await withTimeout(
+        listClient.closeSession(sessionId),
+        ACP_CLOSE_SESSION_TIMEOUT_MS,
+        "closeSession",
+      );
+      closedIds.add(sessionId);
+    } catch (error) {
+      closeFailures += 1;
+      warnings.push(
+        `listed close failed for ${sessionId}: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  }
+
+  await safeTerminate(listClient);
+
+  return {
+    mapped_acp_ids_count: dedupedMapped.length,
+    listed_acp_sessions_count: listedCount,
+    acp_sessions_closed: closedIds.size,
+    acp_close_failures: closeFailures,
+    warnings,
+  };
 }
 
 async function terminatePreservingCause(

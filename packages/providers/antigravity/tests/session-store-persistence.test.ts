@@ -40,6 +40,30 @@ describe("AntigravitySessionStore Persistence", () => {
     expect(await store.exists("antigravity", "sess-to-del")).toBe(false);
   });
 
+  it("listAllAcpSessionIds dedupes memory and persisted records", async () => {
+    const store = new InMemorySessionStore<AcpSessionRecord>();
+    const sessionStore = new AntigravitySessionStore({ store });
+
+    await sessionStore.setPersisted("gw-a", "acp-shared");
+    await sessionStore.setPersisted("gw-b", "acp-shared");
+    await sessionStore.setPersisted("gw-c", "acp-other");
+
+    const ids = (await sessionStore.listAllAcpSessionIds()).sort();
+    expect(ids).toEqual(["acp-other", "acp-shared"]);
+  });
+
+  it("clearInMemory drops cached mappings without touching the backing store", async () => {
+    const store = new InMemorySessionStore<AcpSessionRecord>();
+    const sessionStore = new AntigravitySessionStore({ store });
+
+    await sessionStore.setPersisted("gw-1", "acp-1");
+    expect(sessionStore.get("gw-1")).toBe("acp-1");
+
+    sessionStore.clearInMemory();
+    expect(sessionStore.get("gw-1")).toBeUndefined();
+    expect(await store.get("antigravity", "gw-1")).toBeDefined();
+  });
+
   it("expires persisted session when TTL passes", async () => {
     const store = new InMemorySessionStore<AcpSessionRecord>();
     let now = 10_000;

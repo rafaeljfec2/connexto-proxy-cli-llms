@@ -1,4 +1,6 @@
 import type { AgentExecutionInput, AgentEvent } from "@agent-runtime-gateway/core";
+import { InMemorySessionStore } from "@agent-runtime-gateway/core";
+import type { AcpSessionRecord } from "../src/session-store.js";
 import type {
   AgentTurnResult,
   RunAgentTurnOptions,
@@ -40,6 +42,11 @@ class FakeAcpClient implements AntigravityAcpClient {
     return Promise.resolve({ sessionId });
   }
 
+  public listSessions(): Promise<{ sessions: readonly { sessionId: string }[] }> {
+    this.calls.push("list");
+    return Promise.resolve({ sessions: [] });
+  }
+
   public setSessionConfig(
     sessionId: string,
     configId: string,
@@ -60,6 +67,11 @@ class FakeAcpClient implements AntigravityAcpClient {
 
   public cancelTurn(sessionId: string): void {
     this.calls.push(`cancel:${sessionId}`);
+  }
+
+  public closeSession(sessionId: string): Promise<void> {
+    this.calls.push(`close:${sessionId}`);
+    return Promise.resolve();
   }
 
   public terminate(): Promise<void> {
@@ -294,5 +306,35 @@ describe("AntigravityProvider", () => {
       ),
     ).rejects.toThrow(/local/i);
     expect(clientFactory).not.toHaveBeenCalled();
+  });
+
+  it("closePersistedAcpSessions closes mapped ids and ids from listSessions", async () => {
+    class ListCloseFake extends FakeAcpClient {
+      public override async listSessions(): Promise<{
+        sessions: readonly { sessionId: string }[];
+      }> {
+        this.calls.push("list");
+        return { sessions: [{ sessionId: "acp-from-list" }] };
+      }
+    }
+
+    const mem = new InMemorySessionStore<AcpSessionRecord>();
+    await mem.set("antigravity", "gw-x", {
+      acpSessionId: "acp-mapped",
+      touchedAt: Date.now(),
+    });
+
+    const provider = new AntigravityProvider({
+      clientFactory: () => new ListCloseFake(),
+      sessionStore: mem,
+      defaultWorkingDirectory: "/tmp/ag-clear-test",
+    });
+
+    const report = await provider.closePersistedAcpSessions();
+
+    expect(report.mapped_acp_ids_count).toBe(1);
+    expect(report.listed_acp_sessions_count).toBe(1);
+    expect(report.acp_sessions_closed).toBe(2);
+    expect(report.acp_close_failures).toBe(0);
   });
 });

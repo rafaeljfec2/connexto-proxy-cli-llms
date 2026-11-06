@@ -108,6 +108,14 @@ export class CursorSessionManager {
     }
   }
 
+  /**
+   * Clears in-memory session→agent mappings. Use after the shared SessionStore
+   * namespace was cleared so resumed requests do not use stale agent IDs.
+   */
+  clearInMemorySessionCache(): void {
+    this.sessions.clear();
+  }
+
   async forgetPersisted(sessionId: string): Promise<boolean> {
     this.sessions.delete(sessionId);
     if (this.store !== undefined) {

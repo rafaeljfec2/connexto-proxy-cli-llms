@@ -83,6 +83,14 @@ export class CursorProvider implements AgentProvider {
     return this.sessions;
   }
 
+  /**
+   * Clears in-memory Cursor session cache after persistence was wiped
+   * (e.g. POST /v1/runtime/sessions/clear for namespace cursor).
+   */
+  clearSessionCaches(): void {
+    this.sessions.clearInMemorySessionCache();
+  }
+
   async verifyApiKey(apiKey: string): Promise<CursorMe> {
     try {
       return await verifyCursorApiKey(defaultCursorEnv(), defaultCursorDeps, apiKey);

@@ -1,7 +1,22 @@
 import type { Express, Request, Response, NextFunction } from "express";
+import {
+  AntigravityProvider,
+  type AntigravityRuntimeSessionClearReport,
+} from "@agent-runtime-gateway/provider-antigravity";
+import { CursorProvider } from "@agent-runtime-gateway/provider-cursor";
 import { getGatewayServices } from "../services/gateway.js";
 
 const SAFE_NAMESPACE = /^[a-zA-Z0-9_-]+$/;
+
+type RuntimeSessionsClearBody = {
+  cleared: boolean;
+  namespace: string;
+  mapped_acp_ids_count?: number;
+  listed_acp_sessions_count?: number;
+  acp_sessions_closed?: number;
+  acp_close_failures?: number;
+  warnings?: string[];
+};
 
 /**
  * Mutating runtime routes protected by gateway auth (same as other POST /v1/*).
@@ -28,9 +43,32 @@ export function registerRuntimeRoutes(app: Express): void {
           return;
         }
 
-        const { sessionStore } = getGatewayServices();
+        const { sessionStore, cursorProvider, antigravityProvider } =
+          getGatewayServices();
+        let agReport: AntigravityRuntimeSessionClearReport | undefined;
+        if (namespace === "antigravity") {
+          agReport = await antigravityProvider.closePersistedAcpSessions();
+        }
         await sessionStore.clear(namespace);
-        res.status(200).json({ cleared: true, namespace });
+        if (namespace === "cursor") {
+          cursorProvider.clearSessionCaches();
+        }
+        if (namespace === "antigravity") {
+          antigravityProvider.clearSessionCaches();
+        }
+        const body: RuntimeSessionsClearBody =
+          agReport === undefined
+            ? { cleared: true, namespace }
+            : {
+                cleared: true,
+                namespace,
+                mapped_acp_ids_count: agReport.mapped_acp_ids_count,
+                listed_acp_sessions_count: agReport.listed_acp_sessions_count,
+                acp_sessions_closed: agReport.acp_sessions_closed,
+                acp_close_failures: agReport.acp_close_failures,
+                warnings: [...agReport.warnings],
+              };
+        res.status(200).json(body);
       } catch (error) {
         next(error);
       }

@@ -27,7 +27,7 @@ import {
 export interface GatewayServices {
   executor: RuntimeExecutor;
   cursorProvider: CursorProvider;
-  antigravityProvider: AgentProvider;
+  antigravityProvider: AntigravityProvider;
   antigravityAuthManager: AntigravityAuthManager;
   responseStore: ResponseSessionStore;
   sessionStore: SessionStore<unknown>;
@@ -36,7 +36,9 @@ export interface GatewayServices {
 }
 
 export interface GatewayServiceOptions {
-  readonly antigravityProvider?: AgentProvider;
+  readonly antigravityProvider?: AntigravityProvider;
+  /** Test seam: inject to assert runtime session clear without real Cursor SDK. */
+  readonly cursorProvider?: CursorProvider;
   readonly sessionStore?: SessionStore<unknown>;
 }
 
@@ -89,7 +91,8 @@ export function createGatewayServices(
   }
 
   const registry = new ProviderRegistry();
-  const cursorProvider = new CursorProvider(cursorProviderOptions);
+  const cursorProvider =
+    options.cursorProvider ?? new CursorProvider(cursorProviderOptions);
   const antigravityOptions: AntigravityProviderOptions = {
     defaultWorkingDirectory: env?.CURSOR_DEFAULT_WORKING_DIRECTORY,
     sessionOptions: { ttlMs: env?.SESSION_TTL_MS },
