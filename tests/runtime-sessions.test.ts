@@ -85,7 +85,7 @@ describe("runtime session maintenance", () => {
     expect(closeSpy).toHaveBeenCalledTimes(1);
     expect(clearSpy).toHaveBeenCalledTimes(1);
     expect(closeSpy.mock.invocationCallOrder[0]).toBeLessThan(
-      clearSpy.mock.invocationCallOrder[0]!,
+      clearSpy.mock.invocationCallOrder[0],
     );
     expect(res.body).toMatchObject({
       cleared: true,

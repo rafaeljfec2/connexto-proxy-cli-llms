@@ -39,6 +39,7 @@ export interface GatewayServices {
 export interface GatewayServiceOptions {
   readonly antigravityProvider?: AntigravityProvider;
   readonly antigravityUsageService?: AntigravityUsageService;
+  readonly antigravityAuthManager?: AntigravityAuthManager;
   /** Test seam: inject to assert runtime session clear without real Cursor SDK. */
   readonly cursorProvider?: CursorProvider;
   readonly sessionStore?: SessionStore<unknown>;
@@ -48,6 +49,7 @@ export function createGatewayServices(
   env?: Partial<
     Pick<
       Env,
+      | "HOST"
       | "RESPONSE_TTL_MS"
       | "RESPONSE_MAX_ENTRIES"
       | "SESSION_TTL_MS"
@@ -110,7 +112,8 @@ export function createGatewayServices(
 
   const router = new ProviderRouter(registry);
   const executor = new RuntimeExecutor(router);
-  const antigravityAuthManager = new AntigravityAuthManager();
+  const antigravityAuthManager =
+    options.antigravityAuthManager ?? new AntigravityAuthManager();
   const antigravityUsageService =
     options.antigravityUsageService ?? new AntigravityUsageService();
 

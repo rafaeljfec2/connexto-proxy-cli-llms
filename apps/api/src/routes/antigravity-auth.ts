@@ -52,7 +52,8 @@ export function registerAntigravityAuthRoutes(
           const state =
             typeof req.query.state === "string" ? req.query.state : undefined;
           const code = typeof req.query.code === "string" ? req.query.code : undefined;
-          const error = typeof req.query.error === "string" ? req.query.error : undefined;
+          const error =
+            typeof req.query.error === "string" ? req.query.error : undefined;
           const errorDescription =
             typeof req.query.error_description === "string"
               ? req.query.error_description
@@ -160,6 +161,23 @@ export function registerAntigravityAuthRoutes(
           });
 
           res.status(200).json(result);
+        } catch (error) {
+          next(error);
+        }
+      },
+    );
+
+    // POST .../logout
+    app.post(
+      `${base}/logout`,
+      async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
+        try {
+          const result = await getManager().clearCredentials();
+          res.status(200).json({
+            success: true,
+            message: result.message,
+            removed_files: result.removedFiles,
+          });
         } catch (error) {
           next(error);
         }

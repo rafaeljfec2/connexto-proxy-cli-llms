@@ -113,10 +113,12 @@ describe("Antigravity Auth HTTP Routes Suite", () => {
 
     const startRes = await request(app).post(`${antigravityAuthBase}/start`).send({});
 
-    const callbackRes = await request(app).get(`${antigravityAuthBase}/callback`).query({
-      state: startRes.body.state,
-      code: "auth-authorization-code-12345",
-    });
+    const callbackRes = await request(app)
+      .get(`${antigravityAuthBase}/callback`)
+      .query({
+        state: startRes.body.state,
+        code: "auth-authorization-code-12345",
+      });
 
     expect(callbackRes.status).toBe(200);
     expect(callbackRes.body.status).toBe("completed");
@@ -156,10 +158,12 @@ describe("Antigravity Auth HTTP Routes Suite", () => {
 
     const startRes = await request(app).post(`${antigravityAuthBase}/start`).send({});
 
-    const completeRes = await request(app).post(`${antigravityAuthBase}/callback`).send({
-      state: startRes.body.state,
-      code: "auth-authorization-code-67890",
-    });
+    const completeRes = await request(app)
+      .post(`${antigravityAuthBase}/callback`)
+      .send({
+        state: startRes.body.state,
+        code: "auth-authorization-code-67890",
+      });
 
     expect(completeRes.status).toBe(200);
     expect(completeRes.body.status).toBe("completed");

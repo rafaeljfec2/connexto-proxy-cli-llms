@@ -73,6 +73,7 @@ export interface AntigravityAccountInfo {
 }
 
 export interface AntigravityAuthManagerOptions {
+  readonly homeDir?: string;
   readonly cliPath?: string;
   readonly defaultRedirectUri?: string;
   readonly operationTtlMs?: number;

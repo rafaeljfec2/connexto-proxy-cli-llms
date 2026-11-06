@@ -76,6 +76,7 @@ export async function defaultGoogleTokenExchanger(params: {
 }
 
 export class AntigravityAuthManager {
+  private readonly homeDir: string;
   private readonly operations = new Map<string, AntigravityAuthOperation>();
   private readonly stateToOperationId = new Map<string, string>();
   private readonly operationTtlMs: number;
@@ -95,6 +96,7 @@ export class AntigravityAuthManager {
   private lastActiveOperationId?: string;
 
   constructor(options: AntigravityAuthManagerOptions = {}) {
+    this.homeDir = options.homeDir ?? process.env.HOME ?? os.homedir();
     this.operationTtlMs = options.operationTtlMs ?? DEFAULT_OPERATION_TTL_MS;
     this.accountDetector =
       options.accountDetector ?? (() => this.detectDefaultAccount());
@@ -317,6 +319,40 @@ export class AntigravityAuthManager {
     this.lastActiveOperationId = undefined;
   }
 
+  public async clearCredentials(): Promise<{
+    removedFiles: string[];
+    message: string;
+  }> {
+    this.operations.clear();
+    this.stateToOperationId.clear();
+    this.lastActiveOperationId = undefined;
+
+    const filesToRemove = [
+      path.join(this.homeDir, ".gemini", "oauth_creds.json"),
+      path.join(this.homeDir, ".gemini", "jetski-standalone-oauth-token"),
+      path.join(this.homeDir, ".gemini", "google_accounts.json"),
+      path.join(this.homeDir, ".gemini", "antigravity-cli", "antigravity-oauth-token"),
+      path.join(this.homeDir, ".config", "antigravity", "credential-user-scope"),
+    ];
+
+    const removedFiles: string[] = [];
+    for (const filePath of filesToRemove) {
+      try {
+        await fs.unlink(filePath);
+        removedFiles.push(filePath);
+      } catch (err: unknown) {
+        if ((err as NodeJS.ErrnoException).code !== "ENOENT") {
+          // File might not exist or failed to remove; do not crash
+        }
+      }
+    }
+
+    return {
+      removedFiles,
+      message: "Antigravity credentials and active sessions purged successfully.",
+    };
+  }
+
   private toSummary(op: AntigravityAuthOperation): AntigravityAuthOperationSummary {
     return {
       operationId: op.operationId,
@@ -339,7 +375,7 @@ export class AntigravityAuthManager {
 
   private async detectDefaultAccount(): Promise<AntigravityAccountInfo> {
     try {
-      const home = os.homedir();
+      const home = this.homeDir;
       const accountsFile = path.join(home, ".gemini", "google_accounts.json");
       const content = await fs.readFile(accountsFile, "utf8");
       const data = JSON.parse(content) as { active?: unknown };
@@ -352,7 +388,7 @@ export class AntigravityAuthManager {
     } catch {
       // Fallback: check jetski-standalone-oauth-token for email only
       try {
-        const home = os.homedir();
+        const home = this.homeDir;
         const tokenFile = path.join(home, ".gemini", "jetski-standalone-oauth-token");
         const content = await fs.readFile(tokenFile, "utf8");
         const data = JSON.parse(content) as { id_token_email?: unknown };
@@ -391,7 +427,7 @@ export class AntigravityAuthManager {
     tokens: AntigravityTokens,
     email?: string,
   ): Promise<void> {
-    const homeDir = process.env.HOME || os.homedir();
+    const homeDir = this.homeDir;
     const geminiDir = path.join(homeDir, ".gemini");
     const configDir = path.join(homeDir, ".config", "antigravity");
 

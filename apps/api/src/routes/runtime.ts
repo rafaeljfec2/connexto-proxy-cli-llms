@@ -1,9 +1,5 @@
 import type { Express, Request, Response, NextFunction } from "express";
-import {
-  AntigravityProvider,
-  type AntigravityRuntimeSessionClearReport,
-} from "@agent-runtime-gateway/provider-antigravity";
-import { CursorProvider } from "@agent-runtime-gateway/provider-cursor";
+import type { AntigravityRuntimeSessionClearReport } from "@agent-runtime-gateway/provider-antigravity";
 import { getGatewayServices } from "../services/gateway.js";
 
 const SAFE_NAMESPACE = /^[a-zA-Z0-9_-]+$/;
@@ -15,6 +11,7 @@ type RuntimeSessionsClearBody = {
   listed_acp_sessions_count?: number;
   acp_sessions_closed?: number;
   acp_close_failures?: number;
+  credentials_purged?: boolean;
   warnings?: string[];
 };
 
@@ -30,24 +27,27 @@ export function registerRuntimeRoutes(app: Express): void {
     async (req: Request, res: Response, next: NextFunction): Promise<void> => {
       try {
         const raw = (req.body ?? {}) as { namespace?: unknown };
-        const namespace =
-          typeof raw.namespace === "string" ? raw.namespace.trim() : "";
+        const namespace = typeof raw.namespace === "string" ? raw.namespace.trim() : "";
         if (!SAFE_NAMESPACE.test(namespace)) {
           res.status(400).json({
             error: {
               code: "invalid_namespace",
-              message:
-                'Body must be JSON: { "namespace": "cursor" | "antigravity" }',
+              message: 'Body must be JSON: { "namespace": "cursor" | "antigravity" }',
             },
           });
           return;
         }
 
-        const { sessionStore, cursorProvider, antigravityProvider } =
-          getGatewayServices();
+        const {
+          sessionStore,
+          cursorProvider,
+          antigravityProvider,
+          antigravityAuthManager,
+        } = getGatewayServices();
         let agReport: AntigravityRuntimeSessionClearReport | undefined;
         if (namespace === "antigravity") {
           agReport = await antigravityProvider.closePersistedAcpSessions();
+          await antigravityAuthManager.clearCredentials();
         }
         await sessionStore.clear(namespace);
         if (namespace === "cursor") {
@@ -66,6 +66,7 @@ export function registerRuntimeRoutes(app: Express): void {
                 listed_acp_sessions_count: agReport.listed_acp_sessions_count,
                 acp_sessions_closed: agReport.acp_sessions_closed,
                 acp_close_failures: agReport.acp_close_failures,
+                credentials_purged: true,
                 warnings: [...agReport.warnings],
               };
         res.status(200).json(body);

@@ -33,7 +33,7 @@ export const openApiDocument = {
     {
       name: "Antigravity",
       description:
-        "Google Antigravity OAuth and auth status under `/v1/providers/antigravity/auth`. The gateway still serves the same routes at `/v1/antigravity/auth/*` for backward compatibility. To clear persisted gateway session files under SESSION_STORAGE_PATH, use **Runtime** → `POST /v1/runtime/sessions/clear` (that route does not remove OAuth files under `~/.gemini` or `~/.config/antigravity`).",
+        "Google Antigravity OAuth and auth status under `/v1/providers/antigravity/auth`. The gateway still serves the same routes at `/v1/antigravity/auth/*` for backward compatibility. To clear persisted gateway session files under SESSION_STORAGE_PATH, use **Runtime** → `POST /v1/runtime/sessions/clear` (which also clears local OAuth credential files under `~/.gemini` and `~/.config/antigravity`).",
     },
     {
       name: "Runtime",
@@ -648,6 +648,39 @@ export const openApiDocument = {
             content: {
               "application/json": {
                 schema: { $ref: "#/components/schemas/AntigravityAuthStatusResponse" },
+              },
+            },
+          },
+          "401": {
+            description: "Unauthorized gateway key",
+            content: { "application/json": { schema: errorResponse } },
+          },
+        },
+      },
+    },
+    "/v1/providers/antigravity/auth/logout": {
+      post: {
+        tags: ["Antigravity"],
+        summary: "Logout and purge Antigravity OAuth credentials and session",
+        description:
+          "Purges local Antigravity credentials stored in `~/.gemini` and `~/.config/antigravity`, and clears in-memory auth state.",
+        responses: {
+          "200": {
+            description: "Logout confirmation",
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: {
+                    success: { type: "boolean" },
+                    message: { type: "string" },
+                    removed_files: {
+                      type: "array",
+                      items: { type: "string" },
+                    },
+                  },
+                  required: ["success", "message", "removed_files"],
+                },
               },
             },
           },

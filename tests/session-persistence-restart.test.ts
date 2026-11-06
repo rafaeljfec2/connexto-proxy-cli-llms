@@ -47,9 +47,11 @@ describe("Gateway & Provider Session Persistence Across Restarts", () => {
       connect: vi.fn().mockResolvedValue(undefined),
       createSession: vi.fn().mockResolvedValue({ sessionId: "acp-session-abc-200" }),
       resumeSession: vi.fn().mockResolvedValue({}),
+      listSessions: vi.fn().mockResolvedValue({ sessions: [] }),
       setSessionConfig: vi.fn().mockResolvedValue([]),
       prompt: vi.fn(),
       cancelTurn: vi.fn(),
+      closeSession: vi.fn().mockResolvedValue(undefined),
       terminate: vi.fn().mockResolvedValue(undefined),
     };
 
@@ -136,9 +138,11 @@ describe("Gateway & Provider Session Persistence Across Restarts", () => {
       connect: vi.fn().mockResolvedValue(undefined),
       createSession: vi.fn().mockResolvedValue({ sessionId: "unexpected-new-acp" }),
       resumeSession: vi.fn().mockResolvedValue({}),
+      listSessions: vi.fn().mockResolvedValue({ sessions: [] }),
       setSessionConfig: vi.fn().mockResolvedValue([]),
       prompt: vi.fn(),
       cancelTurn: vi.fn(),
+      closeSession: vi.fn().mockResolvedValue(undefined),
       terminate: vi.fn().mockResolvedValue(undefined),
     };
 

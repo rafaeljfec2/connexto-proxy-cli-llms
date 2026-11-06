@@ -23,7 +23,8 @@ function resolveAgyPath(): string | undefined {
 
 const agyPath = resolveAgyPath();
 const hasAgy = agyPath !== undefined;
-const describeReal = hasAgy ? describe : describe.skip;
+const RUN_REAL = process.env["RUN_ANTIGRAVITY_ACP_TESTS"] === "1";
+const describeReal = hasAgy && RUN_REAL ? describe : describe.skip;
 
 describeReal("Antigravity CLI End-to-End Auth & Storage Persistence", () => {
   let tempStorageDir: string;

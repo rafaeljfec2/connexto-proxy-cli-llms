@@ -310,11 +310,11 @@ describe("AntigravityProvider", () => {
 
   it("closePersistedAcpSessions closes mapped ids and ids from listSessions", async () => {
     class ListCloseFake extends FakeAcpClient {
-      public override async listSessions(): Promise<{
+      public override listSessions(): Promise<{
         sessions: readonly { sessionId: string }[];
       }> {
         this.calls.push("list");
-        return { sessions: [{ sessionId: "acp-from-list" }] };
+        return Promise.resolve({ sessions: [{ sessionId: "acp-from-list" }] });
       }
     }
 

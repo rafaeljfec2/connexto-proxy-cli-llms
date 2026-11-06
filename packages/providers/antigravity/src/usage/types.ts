@@ -51,4 +51,3 @@ export interface AntigravityUsageServiceOptions {
   /** Test seam to inject custom fetch implementation. */
   readonly fetchFn?: typeof fetch;
 }
-

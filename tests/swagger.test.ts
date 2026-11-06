@@ -15,30 +15,20 @@ describe("Swagger / OpenAPI", () => {
     expect(response.body.openapi).toBe("3.0.3");
     expect(response.body.paths["/health"]).toBeDefined();
     expect(response.body.paths["/v1/chat/completions"]).toBeDefined();
-    expect(
-      response.body.paths["/v1/providers/antigravity/auth/start"],
-    ).toBeDefined();
+    expect(response.body.paths["/v1/providers/antigravity/auth/start"]).toBeDefined();
     expect(response.body.paths["/v1/runtime/sessions/clear"]).toBeDefined();
     expect(
       response.body.paths["/v1/providers/antigravity/auth/callback"],
     ).toBeDefined();
+    expect(response.body.paths["/v1/providers/antigravity/auth/status"]).toBeDefined();
     expect(
-      response.body.paths["/v1/providers/antigravity/auth/status"],
+      response.body.paths["/v1/providers/antigravity/auth/operations/{operationId}"],
     ).toBeDefined();
-    expect(
-      response.body.paths[
-        "/v1/providers/antigravity/auth/operations/{operationId}"
-      ],
-    ).toBeDefined();
-    expect(
-      response.body.paths["/v1/providers/antigravity/usage"],
-    ).toBeDefined();
+    expect(response.body.paths["/v1/providers/antigravity/usage"]).toBeDefined();
     expect(
       response.body.components.schemas.AntigravityAuthStatusResponse,
     ).toBeDefined();
-    expect(
-      response.body.components.schemas.AntigravityUsageSnapshot,
-    ).toBeDefined();
+    expect(response.body.components.schemas.AntigravityUsageSnapshot).toBeDefined();
     expect(response.body.servers[0]?.url).toMatch(/^https?:\/\//);
   });
 

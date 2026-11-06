@@ -207,4 +207,55 @@ describe("AntigravityAuthManager Unit Tests", () => {
     );
     expect(exchangerCalledWith?.codeVerifier).toBeDefined();
   });
+
+  it("clearCredentials purges local credential files and in-memory operations", async () => {
+    const fs = await import("node:fs/promises");
+    const os = await import("node:os");
+    const path = await import("node:path");
+
+    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "ag-auth-test-"));
+    const geminiDir = path.join(tmpDir, ".gemini");
+    const agCliDir = path.join(geminiDir, "antigravity-cli");
+    const configDir = path.join(tmpDir, ".config", "antigravity");
+
+    await fs.mkdir(agCliDir, { recursive: true });
+    await fs.mkdir(configDir, { recursive: true });
+
+    const credsFile = path.join(geminiDir, "oauth_creds.json");
+    const accountsFile = path.join(geminiDir, "google_accounts.json");
+    const jetskiFile = path.join(geminiDir, "jetski-standalone-oauth-token");
+    const agCliToken = path.join(agCliDir, "antigravity-oauth-token");
+    const scopeFile = path.join(configDir, "credential-user-scope");
+
+    await fs.writeFile(credsFile, JSON.stringify({ token: "test" }));
+    await fs.writeFile(accountsFile, JSON.stringify({ active: "user@example.com" }));
+    await fs.writeFile(
+      jetskiFile,
+      JSON.stringify({ id_token_email: "user@example.com" }),
+    );
+    await fs.writeFile(agCliToken, JSON.stringify({ token: "test" }));
+    await fs.writeFile(scopeFile, "test-scope");
+
+    const manager = new AntigravityAuthManager({
+      homeDir: tmpDir,
+    });
+
+    const statusBefore = await manager.getStatus();
+    expect(statusBefore.authenticated).toBe(true);
+    expect(statusBefore.account).toBe("user@example.com");
+
+    const clearResult = await manager.clearCredentials();
+    expect(clearResult.removedFiles.length).toBe(5);
+
+    const statusAfter = await manager.getStatus();
+    expect(statusAfter.authenticated).toBe(false);
+    expect(statusAfter.account).toBeUndefined();
+
+    // Verify files on disk no longer exist
+    for (const f of [credsFile, accountsFile, jetskiFile, agCliToken, scopeFile]) {
+      await expect(fs.access(f)).rejects.toThrow();
+    }
+
+    await fs.rm(tmpDir, { recursive: true, force: true });
+  });
 });
