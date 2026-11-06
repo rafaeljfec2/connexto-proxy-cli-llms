@@ -32,6 +32,9 @@ FROM node:${NODE_VERSION}-bookworm-slim AS runtime
 ENV NODE_ENV=production
 ENV HOST=0.0.0.0
 ENV PORT=3000
+ENV HOME=/app
+ENV PATH="/app/.gemini/bin:${PATH}"
+ENV AGY_PATH=/app/.gemini/bin/agy
 
 RUN apt-get update \
   && apt-get install -y --no-install-recommends ca-certificates tini git \
@@ -39,6 +42,7 @@ RUN apt-get update \
   && groupadd --system --gid 1001 gateway \
   && useradd --system --uid 1001 --gid gateway --home-dir /app gateway \
   && mkdir -p /var/lib/connexto-proxy/sessions \
+  && chmod -R 1777 /var/lib/connexto-proxy \
   && chown -R gateway:gateway /var/lib/connexto-proxy
 
 WORKDIR /app

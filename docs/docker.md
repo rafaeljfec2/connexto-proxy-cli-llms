@@ -66,8 +66,8 @@ For agent runs that need a host project tree, mount your workspace and set `CURS
 
 Restarting or recreating the Proxy Docker container preserves provider sessions and authentication state:
 
-- **Named Volume `proxy-sessions`**: Mounted at `/var/lib/connexto-proxy/sessions:rw`. Stores session mappings for Cursor (`cursor/<sessionId>.json`) and Antigravity ACP (`antigravity/<gatewaySessionId>.json`).
-- **Antigravity Host Credentials**: The compose file mounts `${HOST_GEMINI_DIR:-~/.gemini}` to `/app/.gemini` and `${HOST_ANTIGRAVITY_CONFIG_DIR:-~/.config/antigravity}` to `/app/.config/antigravity`, preserving Google OAuth tokens (`oauth_creds.json`, `jetski-standalone-oauth-token`, `google_accounts.json`) and CLI user scopes.
+- **Named Volume `proxy-sessions`**: Mounted at `/var/lib/connexto-proxy/sessions:rw`. Stores session mappings for Cursor (`cursor/<sessionId>.json`) and Antigravity ACP (`antigravity/<gatewaySessionId>.json`). Directory permissions in the image (`1777`) ensure write access across any host UID (`CURSOR_CONTAINER_USER`).
+- **Antigravity Host Credentials & Environment**: The compose file mounts `${HOST_GEMINI_DIR:-${HOME}/.gemini}` to `/app/.gemini` and `${HOST_ANTIGRAVITY_CONFIG_DIR:-${HOME}/.config/antigravity}` to `/app/.config/antigravity`, preserving Google OAuth tokens (`oauth_creds.json`, `jetski-standalone-oauth-token`, `google_accounts.json`) and CLI user scopes. The container sets `HOME=/app`, `AGY_PATH=/app/.gemini/bin/agy`, and adds `/app/.gemini/bin` to `PATH`.
 - **Container Re-creation**: Running `docker compose down && docker compose up -d` retains the `proxy-sessions` volume, eliminating the need to re-login to providers.
 
 ## Health check
