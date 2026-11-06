@@ -8,6 +8,7 @@ import { registerMetaRoutes } from "./routes/meta.js";
 import { registerModelRoutes } from "./routes/models.js";
 import { registerResponseRoutes } from "./routes/responses.js";
 import { registerAntigravityAuthRoutes } from "./routes/antigravity-auth.js";
+import { registerRuntimeRoutes } from "./routes/runtime.js";
 import { registerSwaggerRoutes } from "./routes/swagger.js";
 import { loadEnv, type Env } from "./config/env.js";
 import { createGatewayAuthMiddleware } from "./utils/gateway-auth.js";
@@ -91,6 +92,7 @@ export function buildApp(
   registerCompletionRoutes(app);
   registerResponseRoutes(app);
   registerAntigravityAuthRoutes(app);
+  registerRuntimeRoutes(app);
   app.use(createErrorHandler());
 
   return app;

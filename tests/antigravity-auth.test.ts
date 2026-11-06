@@ -27,11 +27,13 @@ function captureLogs(): { readonly logs: CapturedLog[]; readonly stream: Writabl
   return { logs, stream };
 }
 
+const antigravityAuthBase = "/v1/providers/antigravity/auth";
+
 describe("Antigravity Auth HTTP Routes Suite", () => {
-  it("POST /v1/antigravity/auth/start starts authentication and returns valid payload", async () => {
+  it("POST .../auth/start starts authentication and returns valid payload", async () => {
     const app = buildApp({ HOST: "127.0.0.1" });
 
-    const res = await request(app).post("/v1/antigravity/auth/start").send({});
+    const res = await request(app).post(`${antigravityAuthBase}/start`).send({});
 
     expect(res.status).toBe(200);
     expect(res.body.operationId).toBeDefined();
@@ -42,21 +44,21 @@ describe("Antigravity Auth HTTP Routes Suite", () => {
     expect(res.body.expiresAt).toBeDefined();
   });
 
-  it("GET /v1/antigravity/auth/operations/:operationId returns operation or 404 for unknown operation", async () => {
+  it("GET .../auth/operations/:operationId returns operation or 404 for unknown operation", async () => {
     const app = buildApp({ HOST: "127.0.0.1" });
 
     const notFoundRes = await request(app)
-      .get("/v1/antigravity/auth/operations/non-existent-op-id")
+      .get(`${antigravityAuthBase}/operations/non-existent-op-id`)
       .send();
 
     expect(notFoundRes.status).toBe(404);
     expect(notFoundRes.body.error).toBeDefined();
     expect(notFoundRes.body.error.code).toBe("operation_not_found");
 
-    const startRes = await request(app).post("/v1/antigravity/auth/start").send({});
+    const startRes = await request(app).post(`${antigravityAuthBase}/start`).send({});
 
     const foundRes = await request(app)
-      .get(`/v1/antigravity/auth/operations/${startRes.body.operationId}`)
+      .get(`${antigravityAuthBase}/operations/${startRes.body.operationId}`)
       .send();
 
     expect(foundRes.status).toBe(200);
@@ -64,30 +66,30 @@ describe("Antigravity Auth HTTP Routes Suite", () => {
     expect(foundRes.body.status).toBe("pending");
   });
 
-  it("GET /v1/antigravity/auth/callback validates state and handles missing or mismatched state", async () => {
+  it("GET .../auth/callback validates state and handles missing or mismatched state", async () => {
     const app = buildApp({ HOST: "127.0.0.1" });
 
     const noStateRes = await request(app)
-      .get("/v1/antigravity/auth/callback")
+      .get(`${antigravityAuthBase}/callback`)
       .query({ code: "test-code" });
 
     expect(noStateRes.status).toBe(400);
     expect(noStateRes.body.error.code).toBe("invalid_state");
 
     const invalidStateRes = await request(app)
-      .get("/v1/antigravity/auth/callback")
+      .get(`${antigravityAuthBase}/callback`)
       .query({ state: "unknown-state-token", code: "test-code" });
 
     expect(invalidStateRes.status).toBe(400);
     expect(invalidStateRes.body.error.code).toBe("invalid_state");
   });
 
-  it("GET /v1/antigravity/auth/callback handles authorization denied from Google", async () => {
+  it("GET .../auth/callback handles authorization denied from Google", async () => {
     const app = buildApp({ HOST: "127.0.0.1" });
 
-    const startRes = await request(app).post("/v1/antigravity/auth/start").send({});
+    const startRes = await request(app).post(`${antigravityAuthBase}/start`).send({});
 
-    const deniedRes = await request(app).get("/v1/antigravity/auth/callback").query({
+    const deniedRes = await request(app).get(`${antigravityAuthBase}/callback`).query({
       state: startRes.body.state,
       error: "access_denied",
       error_description: "User rejected permission request",
@@ -98,7 +100,7 @@ describe("Antigravity Auth HTTP Routes Suite", () => {
     expect(deniedRes.body.error.message).toContain("User rejected permission request");
 
     const opRes = await request(app)
-      .get(`/v1/antigravity/auth/operations/${startRes.body.operationId}`)
+      .get(`${antigravityAuthBase}/operations/${startRes.body.operationId}`)
       .send();
 
     expect(opRes.status).toBe(200);
@@ -106,12 +108,12 @@ describe("Antigravity Auth HTTP Routes Suite", () => {
     expect(opRes.body.error).toContain("User rejected permission request");
   });
 
-  it("GET /v1/antigravity/auth/callback completes flow with valid code and state", async () => {
+  it("GET .../auth/callback completes flow with valid code and state", async () => {
     const app = buildApp({ HOST: "127.0.0.1" });
 
-    const startRes = await request(app).post("/v1/antigravity/auth/start").send({});
+    const startRes = await request(app).post(`${antigravityAuthBase}/start`).send({});
 
-    const callbackRes = await request(app).get("/v1/antigravity/auth/callback").query({
+    const callbackRes = await request(app).get(`${antigravityAuthBase}/callback`).query({
       state: startRes.body.state,
       code: "auth-authorization-code-12345",
     });
@@ -121,20 +123,20 @@ describe("Antigravity Auth HTTP Routes Suite", () => {
     expect(callbackRes.body.operationId).toBe(startRes.body.operationId);
 
     const opRes = await request(app)
-      .get(`/v1/antigravity/auth/operations/${startRes.body.operationId}`)
+      .get(`${antigravityAuthBase}/operations/${startRes.body.operationId}`)
       .send();
 
     expect(opRes.status).toBe(200);
     expect(opRes.body.status).toBe("completed");
   });
 
-  it("GET /v1/antigravity/auth/callback returns user-friendly HTML when requested by a browser", async () => {
+  it("GET .../auth/callback returns user-friendly HTML when requested by a browser", async () => {
     const app = buildApp({ HOST: "127.0.0.1" });
 
-    const startRes = await request(app).post("/v1/antigravity/auth/start").send({});
+    const startRes = await request(app).post(`${antigravityAuthBase}/start`).send({});
 
     const htmlRes = await request(app)
-      .get("/v1/antigravity/auth/callback")
+      .get(`${antigravityAuthBase}/callback`)
       .set("Accept", "text/html,application/xhtml+xml")
       .query({
         state: startRes.body.state,
@@ -147,12 +149,12 @@ describe("Antigravity Auth HTTP Routes Suite", () => {
     expect(htmlRes.text).toContain("fechar esta janela");
   });
 
-  it("POST /v1/antigravity/auth/callback completes flow programmatically via JSON", async () => {
+  it("POST .../auth/callback completes flow programmatically via JSON", async () => {
     const app = buildApp({ HOST: "127.0.0.1" });
 
-    const startRes = await request(app).post("/v1/antigravity/auth/start").send({});
+    const startRes = await request(app).post(`${antigravityAuthBase}/start`).send({});
 
-    const completeRes = await request(app).post("/v1/antigravity/auth/callback").send({
+    const completeRes = await request(app).post(`${antigravityAuthBase}/callback`).send({
       state: startRes.body.state,
       code: "auth-authorization-code-67890",
     });
@@ -162,10 +164,10 @@ describe("Antigravity Auth HTTP Routes Suite", () => {
     expect(completeRes.body.operationId).toBe(startRes.body.operationId);
   });
 
-  it("GET /v1/antigravity/auth/status returns status with viability gate and without secrets", async () => {
+  it("GET .../auth/status returns status with viability gate and without secrets", async () => {
     const app = buildApp({ HOST: "127.0.0.1" });
 
-    const statusRes = await request(app).get("/v1/antigravity/auth/status").send();
+    const statusRes = await request(app).get(`${antigravityAuthBase}/status`).send();
 
     expect(statusRes.status).toBe(200);
     expect(typeof statusRes.body.authenticated).toBe("boolean");
@@ -188,11 +190,11 @@ describe("Antigravity Auth HTTP Routes Suite", () => {
       LOG_HTTP_PAYLOADS: true,
     });
 
-    const startRes = await request(app).post("/v1/antigravity/auth/start").send({});
+    const startRes = await request(app).post(`${antigravityAuthBase}/start`).send({});
 
     const secretAuthCode = "SECRET_CODE_VALUE_ABC_999";
 
-    await request(app).get("/v1/antigravity/auth/callback").query({
+    await request(app).get(`${antigravityAuthBase}/callback`).query({
       state: startRes.body.state,
       code: secretAuthCode,
     });
@@ -205,32 +207,46 @@ describe("Antigravity Auth HTTP Routes Suite", () => {
       (l) =>
         l.msg === "http payload" &&
         l.direction === "inbound" &&
-        l.path === "/v1/antigravity/auth/callback",
+        l.path === `${antigravityAuthBase}/callback`,
     );
     expect(callbackLog).toBeDefined();
     expect((callbackLog?.query as Record<string, unknown>)?.code).toBe("[REDACTED]");
   });
 
-  it("enforces gateway authentication on /v1/antigravity/auth endpoints when configured", async () => {
+  it("enforces gateway authentication on Antigravity auth endpoints when configured", async () => {
     const app = buildApp({
       HOST: "127.0.0.1",
       GATEWAY_API_TOKEN: "secret-gateway-token",
     });
 
     const unauthorizedRes = await request(app)
-      .post("/v1/antigravity/auth/start")
+      .post(`${antigravityAuthBase}/start`)
       .send({});
 
     expect(unauthorizedRes.status).toBe(401);
     expect(unauthorizedRes.body.error.code).toBe("unauthorized");
 
     const authorizedRes = await request(app)
-      .post("/v1/antigravity/auth/start")
+      .post(`${antigravityAuthBase}/start`)
       .set("x-gateway-api-key", "secret-gateway-token")
       .send({});
 
     expect(authorizedRes.status).toBe(200);
     expect(authorizedRes.body.operationId).toBeDefined();
+  });
+
+  it("legacy /v1/antigravity/auth/* aliases match canonical behavior", async () => {
+    const app = buildApp({ HOST: "127.0.0.1" });
+    const legacyBase = "/v1/antigravity/auth";
+
+    const start = await request(app).post(`${legacyBase}/start`).send({});
+    expect(start.status).toBe(200);
+
+    const op = await request(app).get(
+      `${legacyBase}/operations/${String(start.body.operationId)}`,
+    );
+    expect(op.status).toBe(200);
+    expect(op.body.operationId).toBe(start.body.operationId);
   });
 
   it("preserves existing routes without regression (/health and /v1/models)", async () => {

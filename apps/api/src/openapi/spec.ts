@@ -32,7 +32,13 @@ export const openApiDocument = {
     { name: "Responses", description: "OpenAI Responses API subset" },
     {
       name: "Antigravity",
-      description: "Google Antigravity authentication and provider endpoints",
+      description:
+        "Google Antigravity OAuth and auth status under `/v1/providers/antigravity/auth`. The gateway still serves the same routes at `/v1/antigravity/auth/*` for backward compatibility. To clear persisted gateway session files under SESSION_STORAGE_PATH, use **Runtime** → `POST /v1/runtime/sessions/clear` (that route does not remove OAuth files under `~/.gemini` or `~/.config/antigravity`).",
+    },
+    {
+      name: "Runtime",
+      description:
+        "Session store maintenance (namespaces under SESSION_STORAGE_PATH, e.g. cursor and antigravity)",
     },
   ],
   components: {
@@ -179,6 +185,26 @@ export const openApiDocument = {
           expiresAt: { type: "string", format: "date-time" },
           account: { type: "string", nullable: true },
           error: { type: "string", nullable: true },
+        },
+      },
+      RuntimeSessionsClearRequest: {
+        type: "object",
+        required: ["namespace"],
+        properties: {
+          namespace: {
+            type: "string",
+            enum: ["cursor", "antigravity"],
+            description:
+              "Provider session namespace to remove from the filesystem session store",
+          },
+        },
+      },
+      RuntimeSessionsClearResponse: {
+        type: "object",
+        required: ["cleared", "namespace"],
+        properties: {
+          cleared: { type: "boolean", example: true },
+          namespace: { type: "string", example: "cursor" },
         },
       },
     },
@@ -385,7 +411,41 @@ export const openApiDocument = {
         responses: { "400": { description: "Not a background response" } },
       },
     },
-    "/v1/antigravity/auth/start": {
+    "/v1/runtime/sessions/clear": {
+      post: {
+        tags: ["Runtime"],
+        summary: "Clear persisted sessions for a provider namespace",
+        description:
+          "Deletes all JSON session files for the given namespace under SESSION_STORAGE_PATH (filesystem driver). Requires gateway authentication when configured. Does not remove Antigravity OAuth files under ~/.gemini or ~/.config/antigravity.",
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: { $ref: "#/components/schemas/RuntimeSessionsClearRequest" },
+            },
+          },
+        },
+        responses: {
+          "200": {
+            description: "Namespace cleared",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/RuntimeSessionsClearResponse" },
+              },
+            },
+          },
+          "400": {
+            description: "Invalid or missing namespace",
+            content: { "application/json": { schema: errorResponse } },
+          },
+          "401": {
+            description: "Missing or invalid gateway API key",
+            content: { "application/json": { schema: errorResponse } },
+          },
+        },
+      },
+    },
+    "/v1/providers/antigravity/auth/start": {
       post: {
         tags: ["Antigravity"],
         summary: "Start Antigravity OAuth flow",
@@ -414,7 +474,7 @@ export const openApiDocument = {
         },
       },
     },
-    "/v1/antigravity/auth/callback": {
+    "/v1/providers/antigravity/auth/callback": {
       get: {
         tags: ["Antigravity"],
         summary: "Handle OAuth callback via redirect / query parameters",
@@ -450,7 +510,7 @@ export const openApiDocument = {
         tags: ["Antigravity"],
         summary: "Complete OAuth authorization via JSON payload",
         description:
-          "Programmatically completes an auth operation using state and authorization code from AI Hub or frontend.",
+          "Programmatically completes an auth operation using state and authorization code from your OAuth client (e.g. control plane or Go gateway).",
         requestBody: {
           required: true,
           content: {
@@ -481,7 +541,7 @@ export const openApiDocument = {
         },
       },
     },
-    "/v1/antigravity/auth/status": {
+    "/v1/providers/antigravity/auth/status": {
       get: {
         tags: ["Antigravity"],
         summary: "Get Antigravity authentication status and viability gate",
@@ -503,7 +563,7 @@ export const openApiDocument = {
         },
       },
     },
-    "/v1/antigravity/auth/operations/{operationId}": {
+    "/v1/providers/antigravity/auth/operations/{operationId}": {
       get: {
         tags: ["Antigravity"],
         summary: "Retrieve auth operation status by ID",

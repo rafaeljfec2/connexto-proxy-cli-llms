@@ -70,6 +70,14 @@ Restarting or recreating the Proxy Docker container preserves provider sessions 
 - **Antigravity Host Credentials & Environment**: The compose file mounts `${HOST_GEMINI_DIR:-${HOME}/.gemini}` to `/app/.gemini` and `${HOST_ANTIGRAVITY_CONFIG_DIR:-${HOME}/.config/antigravity}` to `/app/.config/antigravity`, preserving Google OAuth tokens (`oauth_creds.json`, `jetski-standalone-oauth-token`, `google_accounts.json`) and CLI user scopes. The container sets `HOME=/app`, `AGY_PATH=/app/.gemini/bin/agy`, and adds `/app/.gemini/bin` to `PATH`.
 - **Container Re-creation**: Running `docker compose down && docker compose up -d` retains the `proxy-sessions` volume, eliminating the need to re-login to providers.
 
+### Clearing persisted sessions (API)
+
+To force a fresh provider session without removing the whole volume, call (with `X-Gateway-API-Key` when the server requires it):
+
+`POST /v1/runtime/sessions/clear` with JSON body `{ "namespace": "cursor" }` or `{ "namespace": "antigravity" }`.
+
+This deletes the on-disk session directory for that provider under `SESSION_STORAGE_PATH`. Antigravity OAuth tokens under `~/.gemini` / `~/.config/antigravity` (host mounts) are separate; clear those only if you need a full Google re-login outside the hub.
+
 ## Health check
 
 The image healthcheck calls `GET /health` on the configured `PORT`.

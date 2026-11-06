@@ -145,13 +145,16 @@ describe("AntigravityAuthManager Unit Tests", () => {
 
   it("supports loopback redirect URI as default when configured", async () => {
     const manager = new AntigravityAuthManager({
-      defaultRedirectUri: "http://127.0.0.1:3000/v1/antigravity/auth/callback",
+      defaultRedirectUri:
+        "http://127.0.0.1:3000/v1/providers/antigravity/auth/callback",
       accountDetector: () => Promise.resolve({ authenticated: false }),
     });
 
     const start = await manager.startAuth();
     expect(start.authUrl).toContain(
-      encodeURIComponent("http://127.0.0.1:3000/v1/antigravity/auth/callback"),
+      encodeURIComponent(
+        "http://127.0.0.1:3000/v1/providers/antigravity/auth/callback",
+      ),
     );
   });
 
@@ -169,7 +172,8 @@ describe("AntigravityAuthManager Unit Tests", () => {
     let tokensPersistedEmail: string | undefined;
 
     const manager = new AntigravityAuthManager({
-      defaultRedirectUri: "http://127.0.0.1:3000/v1/antigravity/auth/callback",
+      defaultRedirectUri:
+        "http://127.0.0.1:3000/v1/providers/antigravity/auth/callback",
       tokenExchanger: (params) => {
         exchangerCalledWith = params;
         return Promise.resolve({
@@ -199,7 +203,7 @@ describe("AntigravityAuthManager Unit Tests", () => {
     expect(exchangerCalledWith).toBeDefined();
     expect(exchangerCalledWith?.code).toBe("google-auth-code-test");
     expect(exchangerCalledWith?.redirectUri).toBe(
-      "http://127.0.0.1:3000/v1/antigravity/auth/callback",
+      "http://127.0.0.1:3000/v1/providers/antigravity/auth/callback",
     );
     expect(exchangerCalledWith?.codeVerifier).toBeDefined();
   });
