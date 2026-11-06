@@ -78,6 +78,22 @@ export function registerAntigravityAuthRoutes(
     .icon { font-size: 48px; margin-bottom: 16px; color: #16a34a; }
     h1 { font-size: 22px; margin-bottom: 8px; color: #0f172a; }
     p { font-size: 15px; color: #475569; line-height: 1.5; margin: 8px 0; }
+    .actions { margin-top: 24px; }
+    button {
+      font: inherit;
+      cursor: pointer;
+      border: none;
+      border-radius: 10px;
+      padding: 12px 24px;
+      background: #0f172a;
+      color: #f8fafc;
+      font-weight: 600;
+      font-size: 15px;
+      box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+    }
+    button:hover { background: #1e293b; }
+    button:focus-visible { outline: 2px solid #3b82f6; outline-offset: 2px; }
+    .hint { font-size: 13px; color: #64748b; margin-top: 12px; }
   </style>
 </head>
 <body>
@@ -86,6 +102,23 @@ export function registerAntigravityAuthRoutes(
     <h1>Autenticação Concluída!</h1>
     <p>O Google Antigravity foi autenticado e suas credenciais foram gravadas com sucesso.</p>
     <p><strong>Você já pode fechar esta janela</strong> e voltar ao terminal.</p>
+    <div class="actions">
+      <button type="button" id="close-window">Fechar janela</button>
+      <p class="hint" id="close-fallback" hidden>Se nada acontecer, feche esta aba manualmente (alguns navegadores bloqueiam o fechamento automático).</p>
+    </div>
+    <script>
+      (function () {
+        var btn = document.getElementById("close-window");
+        var hint = document.getElementById("close-fallback");
+        if (!btn) return;
+        btn.addEventListener("click", function () {
+          window.close();
+          if (hint) {
+            setTimeout(function () { hint.hidden = false; }, 300);
+          }
+        });
+      })();
+    </script>
   </div>
 </body>
 </html>`);

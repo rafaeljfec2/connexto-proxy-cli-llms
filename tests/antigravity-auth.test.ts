@@ -147,6 +147,8 @@ describe("Antigravity Auth HTTP Routes Suite", () => {
     expect(htmlRes.headers["content-type"]).toContain("text/html");
     expect(htmlRes.text).toContain("Autenticação Concluída!");
     expect(htmlRes.text).toContain("fechar esta janela");
+    expect(htmlRes.text).toContain("Fechar janela");
+    expect(htmlRes.text).toContain('id="close-window"');
   });
 
   it("POST .../auth/callback completes flow programmatically via JSON", async () => {
