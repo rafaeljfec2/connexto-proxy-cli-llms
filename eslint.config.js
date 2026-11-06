@@ -11,6 +11,7 @@ export default tseslint.config(
       "node_modules/**",
       "coverage/**",
       "eslint.config.js",
+      "packages/providers/antigravity/tests/acp/fixture-agy.mjs",
     ],
   },
   eslint.configs.recommended,
