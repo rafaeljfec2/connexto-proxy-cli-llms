@@ -27,6 +27,7 @@ export function createGatewayServices(
     | "RESPONSE_MAX_ENTRIES"
     | "SESSION_TTL_MS"
     | "LIFECYCLE_CLEANUP_INTERVAL_MS"
+    | "CURSOR_DEFAULT_WORKING_DIRECTORY"
   >,
 ): GatewayServices {
   const activeResources = new ActiveResourceTracker();
@@ -35,8 +36,7 @@ export function createGatewayServices(
     ttlMs: env?.RESPONSE_TTL_MS,
   });
 
-  const registry = new ProviderRegistry();
-  const cursorProvider = new CursorProvider({
+  const cursorProviderOptions: ConstructorParameters<typeof CursorProvider>[0] = {
     sessionOptions: {
       maxSessions: 128,
       ttlMs: env?.SESSION_TTL_MS,
@@ -49,7 +49,14 @@ export function createGatewayServices(
         activeResources.unpinSession(sessionId);
       },
     },
-  });
+  };
+
+  if (env?.CURSOR_DEFAULT_WORKING_DIRECTORY !== undefined) {
+    cursorProviderOptions.defaultWorkingDirectory = env.CURSOR_DEFAULT_WORKING_DIRECTORY;
+  }
+
+  const registry = new ProviderRegistry();
+  const cursorProvider = new CursorProvider(cursorProviderOptions);
   registry.register(cursorProvider);
 
   const router = new ProviderRouter(registry);

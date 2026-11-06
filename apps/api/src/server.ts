@@ -3,11 +3,15 @@ import { loadEnv, loadEnvFileIfPresent } from "./config/env.js";
 import { initializeGatewayServices } from "./services/gateway.js";
 import { createLogger, setLogger } from "./utils/logger.js";
 import { preferCompatibleRipgrepOnPath } from "./utils/ripgrep-path.js";
+import { assertConfiguredWorkingDirectoryExists } from "./utils/working-directory.js";
 
 function main(): void {
   loadEnvFileIfPresent();
   preferCompatibleRipgrepOnPath();
   const env = loadEnv();
+  if (env.CURSOR_DEFAULT_WORKING_DIRECTORY !== undefined) {
+    assertConfiguredWorkingDirectoryExists(env.CURSOR_DEFAULT_WORKING_DIRECTORY);
+  }
   const logger = createLogger({
     format: env.LOG_FORMAT,
     level: env.LOG_LEVEL,

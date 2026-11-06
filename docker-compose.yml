@@ -18,6 +18,12 @@ services:
       LOG_LEVEL: info
       # Local Docker default when .env leaves GATEWAY_API_TOKEN empty. Override in .env for real deployments.
       GATEWAY_API_TOKEN: ${GATEWAY_API_TOKEN:-docker-local-gateway-dev}
+      GATEWAY_JSON_BODY_LIMIT_BYTES: ${GATEWAY_JSON_BODY_LIMIT_BYTES:-33554432}
+      CURSOR_DEFAULT_WORKING_DIRECTORY: /workspace
+    volumes:
+      - ${CURSOR_WORKSPACE_HOST_PATH:-../connexto-aihub}:/workspace:rw
+    # Match the WSL/Linux host uid so the agent can write under the bind-mounted workspace.
+    user: ${CURSOR_CONTAINER_USER:-1000:1000}
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true

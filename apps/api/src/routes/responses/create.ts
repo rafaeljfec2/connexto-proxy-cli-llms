@@ -22,6 +22,7 @@ import { initSseHeaders } from "../../utils/sse.js";
 import { getLogger } from "../../utils/logger.js";
 import { sendHttpError } from "../../utils/error-handler.js";
 import { createRequestCancellation } from "../../utils/request-cancellation.js";
+import { resolveAgentWorkingDirectory } from "../../utils/working-directory.js";
 
 export async function handleCreateResponse(req: Request, res: Response): Promise<void> {
   const services = getGatewayServices();
@@ -104,6 +105,7 @@ export async function handleCreateResponse(req: Request, res: Response): Promise
       message: prepared.prompt.text,
       credential: { type: "api_key", value: apiKey },
       signal: cancellation.signal,
+      workingDirectory: resolveAgentWorkingDirectory(undefined, prepared.toolContext),
     });
 
     if (cancellation.signal.aborted) return;

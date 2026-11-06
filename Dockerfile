@@ -34,7 +34,7 @@ ENV HOST=0.0.0.0
 ENV PORT=3000
 
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends ca-certificates tini \
+  && apt-get install -y --no-install-recommends ca-certificates tini git \
   && rm -rf /var/lib/apt/lists/* \
   && groupadd --system --gid 1001 gateway \
   && useradd --system --uid 1001 --gid gateway --home-dir /app gateway

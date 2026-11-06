@@ -34,14 +34,14 @@ The Snyk SCA tool did not scan the project because it reported that the folder i
 | --------------- | -------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Listener        | `server.ts` binds `HOST` and `PORT`; defaults are `127.0.0.1:3000`                                                               | A non-loopback `HOST` exposes the unauthenticated API to reachable clients.                                                                        |
 | HTTP routes     | Metadata, health, models, chat completions, completions, Responses create/read/delete/input-items/cancel/compact/token endpoints | There is no global gateway authentication middleware. Provider routes resolve a Cursor key directly. Response lifecycle routes do not check a key. |
-| Request parsing | `express.json()` with Express's default 100 KB limit                                                                             | There is no application error middleware after the JSON parser.                                                                                    |
+| Request parsing | `express.json()` with configurable limit (`GATEWAY_JSON_BODY_LIMIT_BYTES`, default 32 MiB)                                       | There is no application error middleware after the JSON parser.                                                                                    |
 | CORS            | `Access-Control-Allow-Origin: *`; allows `authorization` and `x-api-key`                                                         | Any origin can make browser requests where the browser permits access to the target host.                                                          |
 | Logging         | Pino JSON by default; optional colorized `pino-pretty`                                                                           | No Pino `redact` configuration. Request logging is currently field-by-field and avoids bodies and headers.                                         |
 | Cursor provider | Incoming bearer, `x-api-key`, or `CURSOR_API_KEY` environment fallback                                                           | The gateway does not authenticate callers separately from the provider credential.                                                                 |
 | Session state   | Cursor agent sessions are stored by session ID; Responses are stored in a process-wide bounded map of 512 entries                | Session IDs and stored response IDs are not bound to an authenticated gateway principal.                                                           |
 | Image engine    | Exported legacy engine fetches HTTP(S) image URLs                                                                                | Source path exists in the provider package, but the active Express handlers pass prompt text only and do not reach this helper.                    |
 
-The route preparation code validates request shapes, and `express.json()` applies Express's default 100 KB body limit. No explicit rate limiter, request concurrency cap, application timeout, or common security-header middleware was found in `app.ts`. These are hardening recommendations for any deployment reachable by multiple users; no standalone exploit was demonstrated for these omissions.
+The route preparation code validates request shapes, and `express.json()` applies a configurable body limit (default 32 MiB via `GATEWAY_JSON_BODY_LIMIT_BYTES`). No explicit rate limiter, request concurrency cap, application timeout, or common security-header middleware was found in `app.ts`. These are hardening recommendations for any deployment reachable by multiple users; no standalone exploit was demonstrated for these omissions.
 
 ## Findings
 
@@ -185,7 +185,7 @@ The full audit found one moderate advisory, GHSA-g3hv-75wg-m249, for `minimatch`
 **Status:** Hardening recommendation; no standalone vulnerability confirmed  
 **Files:** `apps/api/src/app.ts:12-79`, `apps/api/src/config/env.ts:20-25`
 
-The Express setup has no explicit rate limiter, concurrent provider-run limit, request timeout, or middleware for common headers such as `X-Content-Type-Options` and `Referrer-Policy`. The JSON parser uses its framework default body-size limit of 100 KB, which provides a basic bound but not a provider concurrency limit.
+The Express setup has no explicit rate limiter, concurrent provider-run limit, request timeout, or middleware for common headers such as `X-Content-Type-Options` and `Referrer-Policy`. The JSON parser enforces `GATEWAY_JSON_BODY_LIMIT_BYTES` (default 32 MiB), which bounds ingress but is not a provider concurrency limit.
 
 **Impact:** When deployed for multiple users, a reachable client can submit requests as quickly as the service and provider permit. Browsers and downstream proxies also receive fewer defensive response headers.
 

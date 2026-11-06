@@ -47,7 +47,20 @@ docker build -t agent-runtime-gateway:local .
 
 Compose loads `.env` when present. Set `PORT` to change the published host port. Inside the container the app listens on `0.0.0.0:3000` unless you override `PORT`.
 
-For agent runs that need a host project tree, mount your workspace and set provider working directory via future config or run the container with `-w` / volume — default `cwd` is `/app/apps/api`.
+### Workspace mount (Composer / Codex)
+
+Local Cursor agents need a project tree on disk. The default Compose file mounts a host directory into the container and points the agent there:
+
+| Compose setting | Default | Container path |
+| --------------- | ------- | -------------- |
+| `CURSOR_WORKSPACE_HOST_PATH` | `../connexto-aihub` (sibling repo) | mounted at `/workspace` |
+| `CURSOR_DEFAULT_WORKING_DIRECTORY` | `/workspace` | Cursor SDK `local.cwd` |
+
+Override `CURSOR_WORKSPACE_HOST_PATH` in `.env` when your checkout layout differs. The default Compose file sets `user: 1000:1000` so the bind-mounted workspace remains writable from the container (adjust with `CURSOR_CONTAINER_USER` if your host uid differs). The application tree under `/app` remains world-readable (`755`) so a non-`gateway` uid can still start Node.
+
+The runtime image installs **`git`** (agent tools) and bootstraps **`@vscode/ripgrep`** on `PATH` at startup.
+
+For agent runs that need a host project tree, mount your workspace and set `CURSOR_DEFAULT_WORKING_DIRECTORY` — default `cwd` without these settings is `/app/apps/api` inside the container.
 
 ## Health check
 

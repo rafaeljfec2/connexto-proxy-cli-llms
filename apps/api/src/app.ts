@@ -25,9 +25,12 @@ export function buildApp(
         | "CORS_ORIGINS"
         | "LOG_HTTP_PAYLOADS"
         | "LOG_HTTP_PAYLOAD_MAX_BYTES"
+        | "GATEWAY_JSON_BODY_LIMIT_BYTES"
       >
     > = loadEnv(),
 ): Express {
+  const jsonBodyLimitBytes =
+    config.GATEWAY_JSON_BODY_LIMIT_BYTES ?? 32 * 1024 * 1024;
   const app = express();
 
   // Server-generated correlation ID per request and response summary logging
@@ -78,7 +81,7 @@ export function buildApp(
   registerSwaggerRoutes(app);
 
   app.use(createGatewayAuthMiddleware(config));
-  app.use(express.json());
+  app.use(express.json({ limit: jsonBodyLimitBytes }));
   app.use(createHttpPayloadLoggingMiddleware(config));
 
   registerMetaRoutes(app);

@@ -59,10 +59,23 @@ const envSchema = z
       .int()
       .positive()
       .default(262_144),
+    /** Max JSON request body size for express.json(); aligns with AI Hub gateway default (32 MiB). */
+    GATEWAY_JSON_BODY_LIMIT_BYTES: z.coerce
+      .number()
+      .int()
+      .positive()
+      .default(32 * 1024 * 1024),
     RESPONSE_TTL_MS: z.coerce.number().int().positive().default(3_600_000),
     RESPONSE_MAX_ENTRIES: z.coerce.number().int().positive().default(512),
     SESSION_TTL_MS: z.coerce.number().int().positive().default(86_400_000),
     LIFECYCLE_CLEANUP_INTERVAL_MS: z.coerce.number().int().positive().default(60_000),
+    CURSOR_DEFAULT_WORKING_DIRECTORY: z
+      .string()
+      .optional()
+      .transform((value) => {
+        const trimmed = value?.trim();
+        return trimmed ? trimmed : undefined;
+      }),
   })
   .superRefine((env, context) => {
     const hasPrimaryToken = env.GATEWAY_API_TOKEN !== undefined;

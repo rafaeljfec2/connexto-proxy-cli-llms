@@ -100,7 +100,7 @@ describe("HTTP error handling", () => {
   });
 
   it("returns an OpenAI error for an oversized JSON payload without exposing the body", async () => {
-    const app = buildApp(config);
+    const app = buildApp({ ...config, GATEWAY_JSON_BODY_LIMIT_BYTES: 100_000 });
     const response = await request(app)
       .post("/v1/chat/completions")
       .set("Content-Type", "application/json")

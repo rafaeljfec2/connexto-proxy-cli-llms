@@ -76,6 +76,8 @@ describe("loadEnv", () => {
   describe("runtime lifecycle configuration", () => {
     it("applies conservative defaults", () => {
       const env = loadEnv({});
+      expect(env.GATEWAY_JSON_BODY_LIMIT_BYTES).toBe(32 * 1024 * 1024);
+      expect(env.CURSOR_DEFAULT_WORKING_DIRECTORY).toBeUndefined();
       expect(env.RESPONSE_TTL_MS).toBe(3_600_000);
       expect(env.RESPONSE_MAX_ENTRIES).toBe(512);
       expect(env.SESSION_TTL_MS).toBe(86_400_000);
