@@ -7,6 +7,7 @@ import { registerHealthRoutes } from "./routes/health.js";
 import { registerMetaRoutes } from "./routes/meta.js";
 import { registerModelRoutes } from "./routes/models.js";
 import { registerResponseRoutes } from "./routes/responses.js";
+import { registerAntigravityAuthRoutes } from "./routes/antigravity-auth.js";
 import { registerSwaggerRoutes } from "./routes/swagger.js";
 import { loadEnv, type Env } from "./config/env.js";
 import { createGatewayAuthMiddleware } from "./utils/gateway-auth.js";
@@ -29,8 +30,7 @@ export function buildApp(
       >
     > = loadEnv(),
 ): Express {
-  const jsonBodyLimitBytes =
-    config.GATEWAY_JSON_BODY_LIMIT_BYTES ?? 32 * 1024 * 1024;
+  const jsonBodyLimitBytes = config.GATEWAY_JSON_BODY_LIMIT_BYTES ?? 32 * 1024 * 1024;
   const app = express();
 
   // Server-generated correlation ID per request and response summary logging
@@ -90,6 +90,7 @@ export function buildApp(
   registerChatCompletionRoutes(app);
   registerCompletionRoutes(app);
   registerResponseRoutes(app);
+  registerAntigravityAuthRoutes(app);
   app.use(createErrorHandler());
 
   return app;

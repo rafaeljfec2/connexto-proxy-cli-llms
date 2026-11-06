@@ -5,6 +5,7 @@ import {
   ActiveResourceTracker,
 } from "@agent-runtime-gateway/core";
 import { CursorProvider } from "@agent-runtime-gateway/provider-cursor";
+import { AntigravityAuthManager } from "@agent-runtime-gateway/provider-antigravity";
 import { ResponseSessionStore } from "@agent-runtime-gateway/compatibility-openai";
 import type { Env } from "../config/env.js";
 import {
@@ -15,6 +16,7 @@ import {
 export interface GatewayServices {
   executor: RuntimeExecutor;
   cursorProvider: CursorProvider;
+  antigravityAuthManager: AntigravityAuthManager;
   responseStore: ResponseSessionStore;
   activeResources: ActiveResourceTracker;
   lifecycle: RuntimeLifecycle;
@@ -52,7 +54,8 @@ export function createGatewayServices(
   };
 
   if (env?.CURSOR_DEFAULT_WORKING_DIRECTORY !== undefined) {
-    cursorProviderOptions.defaultWorkingDirectory = env.CURSOR_DEFAULT_WORKING_DIRECTORY;
+    cursorProviderOptions.defaultWorkingDirectory =
+      env.CURSOR_DEFAULT_WORKING_DIRECTORY;
   }
 
   const registry = new ProviderRegistry();
@@ -61,6 +64,7 @@ export function createGatewayServices(
 
   const router = new ProviderRouter(registry);
   const executor = new RuntimeExecutor(router);
+  const antigravityAuthManager = new AntigravityAuthManager();
 
   const lifecycle = new RuntimeLifecycle({
     responseStore,
@@ -74,6 +78,7 @@ export function createGatewayServices(
   return {
     executor,
     cursorProvider,
+    antigravityAuthManager,
     responseStore,
     activeResources,
     lifecycle,

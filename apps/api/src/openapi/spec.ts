@@ -18,16 +18,22 @@ export const openApiDocument = {
   info: {
     title: "Agent Runtime Gateway",
     description:
-      "Local OpenAI-compatible API for Cursor Composer models. Use Authorize to set gateway and Cursor credentials before trying protected routes.",
+      "Local OpenAI-compatible API for Cursor and Google Antigravity providers. Use Authorize to set gateway and provider credentials before trying protected routes.",
     version: "1.0.0",
   },
-  servers: [{ url: "/", description: "Same host and port as this gateway (matches /docs)" }],
+  servers: [
+    { url: "/", description: "Same host and port as this gateway (matches /docs)" },
+  ],
   tags: [
     { name: "Meta", description: "Service metadata and health" },
-    { name: "Models", description: "Composer model catalog" },
+    { name: "Models", description: "Composer and agent model catalog" },
     { name: "Chat", description: "Chat Completions API" },
     { name: "Completions", description: "Legacy completions API" },
     { name: "Responses", description: "OpenAI Responses API subset" },
+    {
+      name: "Antigravity",
+      description: "Google Antigravity authentication and provider endpoints",
+    },
   ],
   components: {
     securitySchemes: {
@@ -35,7 +41,8 @@ export const openApiDocument = {
         type: "apiKey",
         in: "header",
         name: "X-Gateway-API-Key",
-        description: "Gateway consumer credential (required when configured or on non-loopback bind).",
+        description:
+          "Gateway consumer credential (required when configured or on non-loopback bind).",
       },
       CursorBearer: {
         type: "http",
@@ -82,6 +89,96 @@ export const openApiDocument = {
           stream: { type: "boolean", default: false },
           store: { type: "boolean" },
           previous_response_id: { type: "string" },
+        },
+      },
+      AntigravityAuthStartRequest: {
+        type: "object",
+        properties: {
+          redirectUri: {
+            type: "string",
+            description: "Optional OAuth redirect URI",
+            example: "https://antigravity.google/oauth-callback",
+          },
+        },
+      },
+      AntigravityAuthStartResponse: {
+        type: "object",
+        required: ["operationId", "status", "authUrl", "state", "expiresAt"],
+        properties: {
+          operationId: { type: "string", format: "uuid" },
+          status: {
+            type: "string",
+            enum: ["pending", "completed", "failed", "expired"],
+          },
+          authUrl: { type: "string" },
+          state: { type: "string" },
+          expiresAt: { type: "string", format: "date-time" },
+        },
+      },
+      AntigravityAuthCallbackRequest: {
+        type: "object",
+        required: ["state", "code"],
+        properties: {
+          state: { type: "string" },
+          code: { type: "string" },
+          error: { type: "string" },
+          error_description: { type: "string" },
+        },
+      },
+      AntigravityAuthCallbackResponse: {
+        type: "object",
+        required: ["operationId", "status", "message"],
+        properties: {
+          operationId: { type: "string" },
+          status: {
+            type: "string",
+            enum: ["pending", "completed", "failed", "expired"],
+          },
+          account: { type: "string", nullable: true },
+          message: { type: "string" },
+        },
+      },
+      AntigravityAuthStatusResponse: {
+        type: "object",
+        required: ["authenticated", "lastCheckedAt", "viabilityGate", "limitations"],
+        properties: {
+          authenticated: { type: "boolean" },
+          account: { type: "string", nullable: true },
+          lastCheckedAt: { type: "string", format: "date-time" },
+          viabilityGate: {
+            type: "string",
+            enum: ["SUPPORTED", "PARTIALLY_SUPPORTED", "NOT_SUPPORTED", "UNKNOWN"],
+          },
+          limitations: {
+            type: "array",
+            items: { type: "string" },
+          },
+          activeOperation: {
+            type: "object",
+            properties: {
+              operationId: { type: "string" },
+              status: { type: "string" },
+              createdAt: { type: "string", format: "date-time" },
+              expiresAt: { type: "string", format: "date-time" },
+              account: { type: "string", nullable: true },
+              error: { type: "string", nullable: true },
+            },
+          },
+        },
+      },
+      AntigravityAuthOperation: {
+        type: "object",
+        required: ["operationId", "status", "createdAt", "expiresAt"],
+        properties: {
+          operationId: { type: "string" },
+          status: {
+            type: "string",
+            enum: ["pending", "completed", "failed", "expired"],
+          },
+          createdAt: { type: "string", format: "date-time" },
+          expiresAt: { type: "string", format: "date-time" },
+          account: { type: "string", nullable: true },
+          error: { type: "string", nullable: true },
         },
       },
     },
@@ -143,7 +240,10 @@ export const openApiDocument = {
         ],
         responses: {
           "200": { description: "Model object" },
-          "404": { description: "Unknown model", content: { "application/json": { schema: errorResponse } } },
+          "404": {
+            description: "Unknown model",
+            content: { "application/json": { schema: errorResponse } },
+          },
         },
       },
     },
@@ -161,7 +261,10 @@ export const openApiDocument = {
         },
         responses: {
           "200": { description: "JSON completion or SSE when stream=true" },
-          "401": { description: "Missing credentials", content: { "application/json": { schema: errorResponse } } },
+          "401": {
+            description: "Missing credentials",
+            content: { "application/json": { schema: errorResponse } },
+          },
         },
       },
     },
@@ -186,7 +289,10 @@ export const openApiDocument = {
         },
         responses: {
           "200": { description: "Completion response" },
-          "401": { description: "Unauthorized", content: { "application/json": { schema: errorResponse } } },
+          "401": {
+            description: "Unauthorized",
+            content: { "application/json": { schema: errorResponse } },
+          },
         },
       },
     },
@@ -204,7 +310,10 @@ export const openApiDocument = {
         },
         responses: {
           "200": { description: "Response object or SSE stream" },
-          "401": { description: "Unauthorized", content: { "application/json": { schema: errorResponse } } },
+          "401": {
+            description: "Unauthorized",
+            content: { "application/json": { schema: errorResponse } },
+          },
         },
       },
     },
@@ -212,7 +321,9 @@ export const openApiDocument = {
       post: {
         tags: ["Responses"],
         summary: "Estimate input tokens",
-        requestBody: { content: { "application/json": { schema: { type: "object" } } } },
+        requestBody: {
+          content: { "application/json": { schema: { type: "object" } } },
+        },
         responses: { "200": { description: "Token estimate" } },
       },
     },
@@ -220,7 +331,9 @@ export const openApiDocument = {
       post: {
         tags: ["Responses"],
         summary: "Compact transcript",
-        requestBody: { content: { "application/json": { schema: { type: "object" } } } },
+        requestBody: {
+          content: { "application/json": { schema: { type: "object" } } },
+        },
         responses: { "200": { description: "Compact result" } },
       },
     },
@@ -228,33 +341,198 @@ export const openApiDocument = {
       get: {
         tags: ["Responses"],
         summary: "Get stored response",
-        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
+        parameters: [
+          { name: "id", in: "path", required: true, schema: { type: "string" } },
+        ],
         responses: {
           "200": { description: "Stored response" },
-          "404": { description: "Not found", content: { "application/json": { schema: errorResponse } } },
+          "404": {
+            description: "Not found",
+            content: { "application/json": { schema: errorResponse } },
+          },
         },
       },
       delete: {
         tags: ["Responses"],
         summary: "Delete stored response",
-        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
-        responses: { "200": { description: "Deleted" }, "404": { description: "Not found" } },
+        parameters: [
+          { name: "id", in: "path", required: true, schema: { type: "string" } },
+        ],
+        responses: {
+          "200": { description: "Deleted" },
+          "404": { description: "Not found" },
+        },
       },
     },
     "/v1/responses/{id}/input_items": {
       get: {
         tags: ["Responses"],
         summary: "List input items",
-        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
+        parameters: [
+          { name: "id", in: "path", required: true, schema: { type: "string" } },
+        ],
         responses: { "200": { description: "Input item list" } },
       },
     },
     "/v1/responses/{id}/cancel": {
       post: {
         tags: ["Responses"],
-        summary: "Cancel response (background only — currently rejected for local runs)",
-        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
+        summary:
+          "Cancel response (background only — currently rejected for local runs)",
+        parameters: [
+          { name: "id", in: "path", required: true, schema: { type: "string" } },
+        ],
         responses: { "400": { description: "Not a background response" } },
+      },
+    },
+    "/v1/antigravity/auth/start": {
+      post: {
+        tags: ["Antigravity"],
+        summary: "Start Antigravity OAuth flow",
+        description:
+          "Initiates official Google Antigravity OAuth 2.0 PKCE flow, creating an operation and returning the authorization URL.",
+        requestBody: {
+          content: {
+            "application/json": {
+              schema: { $ref: "#/components/schemas/AntigravityAuthStartRequest" },
+            },
+          },
+        },
+        responses: {
+          "200": {
+            description: "Auth operation started successfully",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/AntigravityAuthStartResponse" },
+              },
+            },
+          },
+          "401": {
+            description: "Unauthorized gateway key",
+            content: { "application/json": { schema: errorResponse } },
+          },
+        },
+      },
+    },
+    "/v1/antigravity/auth/callback": {
+      get: {
+        tags: ["Antigravity"],
+        summary: "Handle OAuth callback via redirect / query parameters",
+        description: "Receives code, state or error from identity provider callback.",
+        parameters: [
+          { name: "state", in: "query", required: true, schema: { type: "string" } },
+          { name: "code", in: "query", schema: { type: "string" } },
+          { name: "error", in: "query", schema: { type: "string" } },
+          { name: "error_description", in: "query", schema: { type: "string" } },
+        ],
+        responses: {
+          "200": {
+            description: "Auth operation completed successfully",
+            content: {
+              "application/json": {
+                schema: {
+                  $ref: "#/components/schemas/AntigravityAuthCallbackResponse",
+                },
+              },
+            },
+          },
+          "400": {
+            description: "Invalid state, expired operation, or authorization denied",
+            content: { "application/json": { schema: errorResponse } },
+          },
+          "401": {
+            description: "Unauthorized gateway key",
+            content: { "application/json": { schema: errorResponse } },
+          },
+        },
+      },
+      post: {
+        tags: ["Antigravity"],
+        summary: "Complete OAuth authorization via JSON payload",
+        description:
+          "Programmatically completes an auth operation using state and authorization code from AI Hub or frontend.",
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: { $ref: "#/components/schemas/AntigravityAuthCallbackRequest" },
+            },
+          },
+        },
+        responses: {
+          "200": {
+            description: "Auth operation completed successfully",
+            content: {
+              "application/json": {
+                schema: {
+                  $ref: "#/components/schemas/AntigravityAuthCallbackResponse",
+                },
+              },
+            },
+          },
+          "400": {
+            description: "Invalid state, expired operation, or authorization denied",
+            content: { "application/json": { schema: errorResponse } },
+          },
+          "401": {
+            description: "Unauthorized gateway key",
+            content: { "application/json": { schema: errorResponse } },
+          },
+        },
+      },
+    },
+    "/v1/antigravity/auth/status": {
+      get: {
+        tags: ["Antigravity"],
+        summary: "Get Antigravity authentication status and viability gate",
+        description:
+          "Returns whether the local Antigravity environment is authenticated, active account, viability gate classification, and documented limitations without exposing secrets.",
+        responses: {
+          "200": {
+            description: "Authentication status report",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/AntigravityAuthStatusResponse" },
+              },
+            },
+          },
+          "401": {
+            description: "Unauthorized gateway key",
+            content: { "application/json": { schema: errorResponse } },
+          },
+        },
+      },
+    },
+    "/v1/antigravity/auth/operations/{operationId}": {
+      get: {
+        tags: ["Antigravity"],
+        summary: "Retrieve auth operation status by ID",
+        parameters: [
+          {
+            name: "operationId",
+            in: "path",
+            required: true,
+            schema: { type: "string" },
+          },
+        ],
+        responses: {
+          "200": {
+            description: "Auth operation summary",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/AntigravityAuthOperation" },
+              },
+            },
+          },
+          "404": {
+            description: "Operation not found",
+            content: { "application/json": { schema: errorResponse } },
+          },
+          "401": {
+            description: "Unauthorized gateway key",
+            content: { "application/json": { schema: errorResponse } },
+          },
+        },
       },
     },
   },

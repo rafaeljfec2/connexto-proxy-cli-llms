@@ -47,7 +47,7 @@ export function createLogger(config: LoggerConfig = {}): Logger {
   }
 
   if (format === "pretty") {
-    const pretty = require("pino-pretty") as typeof import("pino-pretty").default;
+    const pretty = require("pino-pretty") as typeof import("pino-pretty");
     const prettyStream = pretty({
       colorize: true,
       translateTime: "SYS:standard",

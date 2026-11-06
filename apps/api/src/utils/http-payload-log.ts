@@ -7,7 +7,8 @@ const SENSITIVE_HEADER_NAMES = new Set([
   "proxy-authorization",
 ]);
 
-const SENSITIVE_JSON_KEY = /^(api[_-]?key|access[_-]?token|refresh[_-]?token|password|secret|token|credential|authorization)$/i;
+const SENSITIVE_JSON_KEY =
+  /^(api[_-]?key|access[_-]?token|refresh[_-]?token|password|secret|token|credential|authorization|code|authorization[_-]?code)$/i;
 
 const REDACTED = "[REDACTED]";
 
@@ -53,10 +54,7 @@ export function redactSensitiveJson(value: unknown): unknown {
   return out;
 }
 
-export function serializePayloadForLog(
-  value: unknown,
-  maxBytes: number,
-): unknown {
+export function serializePayloadForLog(value: unknown, maxBytes: number): unknown {
   if (value === undefined) {
     return undefined;
   }

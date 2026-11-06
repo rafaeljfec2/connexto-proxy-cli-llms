@@ -17,6 +17,9 @@ importers:
       '@agent-runtime-gateway/core':
         specifier: workspace:*
         version: link:packages/core
+      '@agent-runtime-gateway/provider-antigravity':
+        specifier: workspace:*
+        version: link:packages/providers/antigravity
       '@agent-runtime-gateway/provider-cursor':
         specifier: workspace:*
         version: link:packages/providers/cursor
@@ -71,6 +74,9 @@ importers:
       '@agent-runtime-gateway/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@agent-runtime-gateway/provider-antigravity':
+        specifier: workspace:*
+        version: link:../../packages/providers/antigravity
       '@agent-runtime-gateway/provider-cursor':
         specifier: workspace:*
         version: link:../../packages/providers/cursor
@@ -116,6 +122,15 @@ importers:
         version: link:../../core
 
   packages/core: {}
+
+  packages/providers/antigravity:
+    dependencies:
+      '@agent-runtime-gateway/compatibility-openai':
+        specifier: workspace:*
+        version: link:../../compatibility/openai
+      '@agent-runtime-gateway/core':
+        specifier: workspace:*
+        version: link:../../core
 
   packages/providers/cursor:
     dependencies:

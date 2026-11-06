@@ -4,7 +4,10 @@ import { describe, expect, it } from "vitest";
 
 describe("Swagger / OpenAPI", () => {
   it("serves the OpenAPI document without gateway auth", async () => {
-    const app = buildApp({ HOST: "127.0.0.1", GATEWAY_API_TOKEN: "test-gateway-token" });
+    const app = buildApp({
+      HOST: "127.0.0.1",
+      GATEWAY_API_TOKEN: "test-gateway-token",
+    });
 
     const response = await request(app).get("/openapi.json");
 
@@ -12,6 +15,15 @@ describe("Swagger / OpenAPI", () => {
     expect(response.body.openapi).toBe("3.0.3");
     expect(response.body.paths["/health"]).toBeDefined();
     expect(response.body.paths["/v1/chat/completions"]).toBeDefined();
+    expect(response.body.paths["/v1/antigravity/auth/start"]).toBeDefined();
+    expect(response.body.paths["/v1/antigravity/auth/callback"]).toBeDefined();
+    expect(response.body.paths["/v1/antigravity/auth/status"]).toBeDefined();
+    expect(
+      response.body.paths["/v1/antigravity/auth/operations/{operationId}"],
+    ).toBeDefined();
+    expect(
+      response.body.components.schemas.AntigravityAuthStatusResponse,
+    ).toBeDefined();
     expect(response.body.servers[0]?.url).toMatch(/^https?:\/\//);
   });
 
