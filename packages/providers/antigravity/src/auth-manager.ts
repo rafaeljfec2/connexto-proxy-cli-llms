@@ -105,7 +105,10 @@ export class AntigravityAuthManager {
   private lastActiveOperationId?: string;
 
   constructor(options: AntigravityAuthManagerOptions = {}) {
-    this.homeDir = options.homeDir ?? process.env.HOME ?? os.homedir();
+    const defaultStorage =
+      process.env.ANTIGRAVITY_STORAGE_PATH ??
+      path.join(os.homedir(), ".connexto-proxy", "antigravity");
+    this.homeDir = options.homeDir ?? defaultStorage;
     this.operationTtlMs = options.operationTtlMs ?? DEFAULT_OPERATION_TTL_MS;
     this.accountDetector =
       options.accountDetector ?? (() => this.detectDefaultAccount());

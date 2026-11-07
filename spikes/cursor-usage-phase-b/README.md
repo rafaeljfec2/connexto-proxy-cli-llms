@@ -1,0 +1,33 @@
+# Phase B — Cursor usage collector spike
+
+## Versions
+
+- `playwright-core`: 1.50.1 (see `packages/providers/cursor-usage/package.json`)
+- Chromium: system package in `Dockerfile` (`CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium`)
+
+## Smoke (browser launch)
+
+From repo root after `pnpm install`:
+
+```bash
+CHROMIUM_EXECUTABLE_PATH=${CHROMIUM_EXECUTABLE_PATH:-/usr/bin/chromium} \
+  node spikes/cursor-usage-phase-b/chromium-smoke.mjs
+```
+
+## Network capture pattern
+
+Register `page.waitForResponse` **before** `page.goto` (see `PlaywrightBrowserPool.waitForUsageJson`).
+
+Override the URL predicate with `CURSOR_USAGE_RESPONSE_URL_PATTERN` once the real usage XHR is confirmed against a logged-in session.
+
+## Remote UI (noVNC)
+
+Do not expose display ports publicly. Serve interaction only behind the AI Hub gateway with short-lived `interactionUrl` tokens.
+
+## Decisive test checklist
+
+1. Manual Cursor login in assisted session.
+2. Close remote UI; collect still succeeds on the same `BrowserContext` / persisted `storageState`.
+3. Second collect without re-login.
+4. Proxy restart with `SESSION_STORAGE_DRIVER=filesystem` rehydrates session.
+5. `POST /v1/runtime/sessions/clear` with `{"namespace":"cursor-usage"}` forces `authentication_required`.

@@ -18,8 +18,19 @@ export function createHttpPayloadLoggingMiddleware(
   const enabled = config.LOG_HTTP_PAYLOADS ?? true;
   const maxBytes = config.LOG_HTTP_PAYLOAD_MAX_BYTES ?? 262_144;
 
+  const sensitivePathPrefixes = [
+    "/v1/providers/cursor/usage",
+    "/v1/providers/cursor/auth",
+  ];
+
   return (req, res, next) => {
     if (!enabled) {
+      next();
+      return;
+    }
+
+    const path = (req.path ?? "").split("?")[0];
+    if (sensitivePathPrefixes.some((prefix) => path.startsWith(prefix))) {
       next();
       return;
     }

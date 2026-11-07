@@ -81,6 +81,23 @@ const envSchema = z
         const trimmed = value?.trim();
         return trimmed ? trimmed : undefined;
       }),
+    CHROMIUM_EXECUTABLE_PATH: z
+      .string()
+      .optional()
+      .transform((value) => {
+        const trimmed = value?.trim();
+        return trimmed ? trimmed : undefined;
+      }),
+    CURSOR_USAGE_LOGIN_URL: z.string().trim().optional(),
+    CURSOR_USAGE_DASHBOARD_URL: z.string().trim().optional(),
+    CURSOR_USAGE_RESPONSE_URL_PATTERN: z.string().trim().optional(),
+    CURSOR_USAGE_INTERACTION_URL_BASE: z
+      .string()
+      .optional()
+      .transform((value) => {
+        const trimmed = value?.trim();
+        return trimmed ? trimmed.replace(/\/$/, "") : undefined;
+      }),
   })
   .superRefine((env, context) => {
     const hasPrimaryToken = env.GATEWAY_API_TOKEN !== undefined;

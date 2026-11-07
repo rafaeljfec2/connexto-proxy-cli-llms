@@ -35,9 +35,10 @@ ENV PORT=3000
 ENV HOME=/app
 ENV PATH="/app/.gemini/bin:${PATH}"
 ENV AGY_PATH=/app/.gemini/bin/agy
+ENV CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium
 
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends ca-certificates tini git \
+  && apt-get install -y --no-install-recommends ca-certificates tini git chromium \
   && rm -rf /var/lib/apt/lists/* \
   && groupadd --system --gid 1001 gateway \
   && useradd --system --uid 1001 --gid gateway --home-dir /app gateway \

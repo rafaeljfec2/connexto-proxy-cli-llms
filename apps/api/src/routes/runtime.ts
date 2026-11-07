@@ -19,7 +19,7 @@ type RuntimeSessionsClearBody = {
  * Mutating runtime routes protected by gateway auth (same as other POST /v1/*).
  *
  * POST /v1/runtime/sessions/clear
- * Body: { "namespace": "cursor" | "antigravity" } — clears persisted FilesystemSessionStore dir for that provider.
+ * Body: { "namespace": "cursor" | "antigravity" | "cursor-usage" } — clears persisted FilesystemSessionStore dir for that provider.
  */
 export function registerRuntimeRoutes(app: Express): void {
   app.post(
@@ -32,7 +32,7 @@ export function registerRuntimeRoutes(app: Express): void {
           res.status(400).json({
             error: {
               code: "invalid_namespace",
-              message: 'Body must be JSON: { "namespace": "cursor" | "antigravity" }',
+              message: 'Body must be JSON: { "namespace": "cursor" | "antigravity" | "cursor-usage" }',
             },
           });
           return;
@@ -43,11 +43,15 @@ export function registerRuntimeRoutes(app: Express): void {
           cursorProvider,
           antigravityProvider,
           antigravityAuthManager,
+          cursorUsageService,
         } = getGatewayServices();
         let agReport: AntigravityRuntimeSessionClearReport | undefined;
         if (namespace === "antigravity") {
           agReport = await antigravityProvider.closePersistedAcpSessions();
           await antigravityAuthManager.clearCredentials();
+        }
+        if (namespace === "cursor-usage") {
+          await cursorUsageService.clearPersistedSessions();
         }
         await sessionStore.clear(namespace);
         if (namespace === "cursor") {

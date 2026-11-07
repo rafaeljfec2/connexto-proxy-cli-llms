@@ -9,6 +9,7 @@ import { registerModelRoutes } from "./routes/models.js";
 import { registerResponseRoutes } from "./routes/responses.js";
 import { registerAntigravityAuthRoutes } from "./routes/antigravity-auth.js";
 import { registerAntigravityUsageRoutes } from "./routes/antigravity-usage.js";
+import { registerCursorUsageRoutes } from "./routes/cursor-usage.js";
 import { registerRuntimeRoutes } from "./routes/runtime.js";
 import { registerSwaggerRoutes } from "./routes/swagger.js";
 import { loadEnv, type Env } from "./config/env.js";
@@ -94,6 +95,7 @@ export function buildApp(
   registerResponseRoutes(app);
   registerAntigravityAuthRoutes(app);
   registerAntigravityUsageRoutes(app);
+  registerCursorUsageRoutes(app);
   registerRuntimeRoutes(app);
   app.use(createErrorHandler());
 

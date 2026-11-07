@@ -19,6 +19,7 @@ import {
   AntigravityUsageService,
   type AntigravityProviderOptions,
 } from "@agent-runtime-gateway/provider-antigravity";
+import { CursorUsageService } from "@agent-runtime-gateway/provider-cursor-usage";
 import { ResponseSessionStore } from "@agent-runtime-gateway/compatibility-openai";
 import type { Env } from "../config/env.js";
 import {
@@ -32,6 +33,7 @@ export interface GatewayServices {
   antigravityProvider: AntigravityProvider;
   antigravityAuthManager: AntigravityAuthManager;
   antigravityUsageService: AntigravityUsageService;
+  cursorUsageService: CursorUsageService;
   responseStore: ResponseSessionStore;
   sessionStore: SessionStore<unknown>;
   activeResources: ActiveResourceTracker;
@@ -42,6 +44,7 @@ export interface GatewayServiceOptions {
   readonly antigravityProvider?: AntigravityProvider;
   readonly antigravityUsageService?: AntigravityUsageService;
   readonly antigravityAuthManager?: AntigravityAuthManager;
+  readonly cursorUsageService?: CursorUsageService;
   /** Test seam: inject to assert runtime session clear without real Cursor SDK. */
   readonly cursorProvider?: CursorProvider;
   readonly sessionStore?: SessionStore<unknown>;
@@ -52,6 +55,7 @@ export function createGatewayServices(
     Pick<
       Env,
       | "HOST"
+      | "PORT"
       | "RESPONSE_TTL_MS"
       | "RESPONSE_MAX_ENTRIES"
       | "SESSION_TTL_MS"
@@ -60,6 +64,11 @@ export function createGatewayServices(
       | "LIFECYCLE_CLEANUP_INTERVAL_MS"
       | "CURSOR_DEFAULT_WORKING_DIRECTORY"
       | "ANTIGRAVITY_STORAGE_PATH"
+      | "CHROMIUM_EXECUTABLE_PATH"
+      | "CURSOR_USAGE_LOGIN_URL"
+      | "CURSOR_USAGE_DASHBOARD_URL"
+      | "CURSOR_USAGE_RESPONSE_URL_PATTERN"
+      | "CURSOR_USAGE_INTERACTION_URL_BASE"
     >
   >,
   options: GatewayServiceOptions = {},
@@ -127,6 +136,28 @@ export function createGatewayServices(
     options.antigravityUsageService ??
     new AntigravityUsageService({ homeDir: antigravityStoragePath });
 
+  const usagePatternSource = env?.CURSOR_USAGE_RESPONSE_URL_PATTERN?.trim();
+  const usageResponseUrlPattern =
+    usagePatternSource !== undefined && usagePatternSource.length > 0
+      ? new RegExp(usagePatternSource, "i")
+      : undefined;
+
+  const cursorUsageService =
+    options.cursorUsageService ??
+    new CursorUsageService({
+      sessionTtlMs: env?.SESSION_TTL_MS,
+      store: sessionStore as unknown as NonNullable<
+        import("@agent-runtime-gateway/provider-cursor-usage").CursorUsageServiceOptions["store"]
+      >,
+      chromiumExecutablePath: env?.CHROMIUM_EXECUTABLE_PATH,
+      loginUrl: env?.CURSOR_USAGE_LOGIN_URL,
+      dashboardUrl: env?.CURSOR_USAGE_DASHBOARD_URL,
+      usageResponseUrlPattern,
+      interactionUrlBase:
+        env?.CURSOR_USAGE_INTERACTION_URL_BASE ??
+        `http://${env?.HOST ?? "127.0.0.1"}:${env?.PORT ?? 3000}`,
+    });
+
   const lifecycle = new RuntimeLifecycle({
     responseStore,
     sessions: cursorProvider.getSessionManager(),
@@ -142,6 +173,7 @@ export function createGatewayServices(
     antigravityProvider,
     antigravityAuthManager,
     antigravityUsageService,
+    cursorUsageService,
     responseStore,
     sessionStore,
     activeResources,

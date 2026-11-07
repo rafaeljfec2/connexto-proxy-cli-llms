@@ -43,7 +43,7 @@ describeReal("Antigravity CLI End-to-End Auth & Storage Persistence", () => {
   });
 
   it("completes full auth lifecycle and detects account from local Google CLI credentials", async () => {
-    const authManager = new AntigravityAuthManager();
+    const authManager = new AntigravityAuthManager({ homeDir: tempStorageDir });
 
     // 1. Check current status
     const initialStatus = await authManager.getStatus();

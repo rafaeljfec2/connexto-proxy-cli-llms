@@ -260,7 +260,7 @@ export const openApiDocument = {
         properties: {
           namespace: {
             type: "string",
-            enum: ["cursor", "antigravity"],
+            enum: ["cursor", "antigravity", "cursor-usage"],
             description:
               "Provider session namespace to remove from the filesystem session store",
           },
@@ -721,6 +721,81 @@ export const openApiDocument = {
             content: { "application/json": { schema: errorResponse } },
           },
         },
+      },
+    },
+    "/v1/providers/cursor/usage/collect": {
+      post: {
+        tags: ["Cursor usage"],
+        summary: "Collect Cursor dashboard usage via browser session",
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                required: ["accountId"],
+                properties: {
+                  accountId: { type: "string" },
+                  hubAccountId: { type: "string" },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          "200": { description: "Usage JSON collected" },
+          "401": { description: "Authentication required or session expired" },
+          "503": { description: "Browser unavailable" },
+        },
+      },
+    },
+    "/v1/providers/cursor/auth": {
+      post: {
+        tags: ["Cursor usage"],
+        summary: "Start assisted Cursor login session",
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                required: ["accountId"],
+                properties: { accountId: { type: "string" } },
+              },
+            },
+          },
+        },
+        responses: {
+          "200": { description: "Auth operation started with interactionUrl" },
+        },
+      },
+    },
+    "/v1/providers/cursor/auth/{sessionId}": {
+      get: {
+        tags: ["Cursor usage"],
+        summary: "Poll Cursor auth session status",
+        parameters: [
+          {
+            name: "sessionId",
+            in: "path",
+            required: true,
+            schema: { type: "string" },
+          },
+        ],
+        responses: { "200": { description: "Auth status" } },
+      },
+      delete: {
+        tags: ["Cursor usage"],
+        summary: "Cancel Cursor auth session",
+        parameters: [
+          {
+            name: "sessionId",
+            in: "path",
+            required: true,
+            schema: { type: "string" },
+          },
+        ],
+        responses: { "204": { description: "Cancelled" } },
       },
     },
     "/v1/providers/antigravity/usage": {

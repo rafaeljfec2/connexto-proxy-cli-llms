@@ -19,6 +19,7 @@
     "@agent-runtime-gateway/core": "workspace:*",
     "@agent-runtime-gateway/provider-antigravity": "workspace:*",
     "@agent-runtime-gateway/provider-cursor": "workspace:*",
+    "@agent-runtime-gateway/provider-cursor-usage": "workspace:*",
     "@eslint/js": "^9.39.1",
     "@types/node": "^24.10.0",
     "@types/supertest": "^7.2.1",

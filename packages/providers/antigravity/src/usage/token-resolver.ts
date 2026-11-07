@@ -49,7 +49,10 @@ export class AntigravityTokenResolver {
   private readonly clientSecret: string;
 
   constructor(options: AntigravityTokenResolverOptions = {}) {
-    this.homeDir = options.homeDir ?? process.env.HOME ?? os.homedir();
+    const defaultStorage =
+      process.env.ANTIGRAVITY_STORAGE_PATH ??
+      path.join(os.homedir(), ".connexto-proxy", "antigravity");
+    this.homeDir = options.homeDir ?? defaultStorage;
     this.fetchFn = options.fetchFn ?? fetch;
     this.clientId = options.clientId ?? GOOGLE_OAUTH_CLIENT_ID;
     this.clientSecret = options.clientSecret ?? GOOGLE_OAUTH_CLIENT_SECRET;
