@@ -21,7 +21,12 @@ import { initSseHeaders } from "../../utils/sse.js";
 import { getLogger } from "../../utils/logger.js";
 import { sendHttpError } from "../../utils/error-handler.js";
 import { createRequestCancellation } from "../../utils/request-cancellation.js";
-import { resolveAgentWorkingDirectory } from "../../utils/working-directory.js";
+import {
+  getConfiguredDefaultWorkingDirectory,
+  isHubIntegratedRequest,
+  providerRequiresLocalWorkspace,
+  resolveExecutionWorkingDirectory,
+} from "../../utils/execution-working-directory.js";
 import {
   assertAntigravityToolsUnsupported,
   providerCredential,
@@ -116,6 +121,27 @@ export async function handleCreateResponse(req: Request, res: Response): Promise
       previousState?.sdkSessionKey,
     );
 
+    const hubIntegrated = isHubIntegratedRequest(req);
+    const workingDirectory = resolveExecutionWorkingDirectory({
+      hubIntegrated,
+      configuredDefault: getConfiguredDefaultWorkingDirectory(),
+      toolContext: prepared.toolContext,
+    });
+    if (
+      hubIntegrated &&
+      providerRequiresLocalWorkspace(target.providerId) &&
+      workingDirectory === undefined
+    ) {
+      res.status(422).json(
+        openAiErrorPayload(
+          "Agent workspace could not be resolved from the request. Include IDE working-directory context in instructions or input.",
+          "invalid_request_error",
+          "working_directory",
+        ),
+      );
+      return;
+    }
+
     const providerStart = performance.now();
     const run = await services.executor.execute(target.providerId, {
       sessionId: sessionAffinity,
@@ -123,7 +149,7 @@ export async function handleCreateResponse(req: Request, res: Response): Promise
       message: prepared.prompt.text,
       credential: providerCredential(target, apiKey),
       signal: cancellation.signal,
-      workingDirectory: resolveAgentWorkingDirectory(undefined, prepared.toolContext),
+      ...(workingDirectory !== undefined ? { workingDirectory } : {}),
       ...executionImagesInput(images),
     });
 

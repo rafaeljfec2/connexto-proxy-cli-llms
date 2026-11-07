@@ -10,6 +10,7 @@ import {
   createCompletedRun,
   createStubProvider,
 } from "../packages/core/tests/helpers/stub-provider.js";
+import { codexWorkspaceSystemMessage } from "./helpers/codex-workspace.js";
 
 interface ProviderRegistryAccess {
   readonly router: {
@@ -58,7 +59,10 @@ function registerAntigravityStub(): void {
 function requestBody(model: string = antigravityModel): Record<string, unknown> {
   return {
     model,
-    messages: [{ role: "user", content: "Hello from the existing API" }],
+    messages: [
+      codexWorkspaceSystemMessage,
+      { role: "user", content: "Hello from the existing API" },
+    ],
   };
 }
 

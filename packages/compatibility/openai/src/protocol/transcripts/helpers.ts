@@ -209,6 +209,10 @@ export function workingDirectoryFromText(text: string): string | undefined {
     /^\s*Current working directory:\s*(.+)$/im,
     /^\s*Workspace root folder:\s*(.+)$/im,
     /^\s*Workspace root:\s*(.+)$/im,
+    /^\s*CWD:\s*(.+)$/im,
+    /^\s*Project root:\s*(.+)$/im,
+    /^\s*Open folder:\s*(.+)$/im,
+    /^\s*Repository root:\s*(.+)$/im,
   ]) {
     const match = pattern.exec(text);
     const value = sanitizeContextPath(match?.[1]);

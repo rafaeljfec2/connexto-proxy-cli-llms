@@ -13,6 +13,7 @@ import {
   LOCAL_PRINCIPAL,
   principalFromCredential,
 } from "../apps/api/src/utils/identity.js";
+import { codexWorkspaceSystemMessage } from "./helpers/codex-workspace.js";
 
 const gatewayToken = "synthetic-gateway-token-123";
 const responseId = "resp_gateway_auth_test";
@@ -205,11 +206,26 @@ describe("gateway authentication", () => {
       .post("/v1/chat/completions")
       .set("X-Gateway-API-Key", gatewayToken)
       .set("Authorization", "Bearer synthetic-cursor-key")
-      .send({ messages: [{ role: "user", content: "hello" }] });
+      .send({
+        messages: [codexWorkspaceSystemMessage, { role: "user", content: "hello" }],
+      });
 
     expect(response.status).toBe(200);
     expect(response.body.choices[0].message.content).toBe("mock provider response");
     expect(providerExecute).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects hub-integrated Cursor requests without agent workspace context", async () => {
+    providerExecute.mockClear();
+    const response = await request(createAuthenticatedApp())
+      .post("/v1/chat/completions")
+      .set("X-Gateway-API-Key", gatewayToken)
+      .set("Authorization", "Bearer synthetic-cursor-key")
+      .send({ messages: [{ role: "user", content: "hello" }] });
+
+    expect(response.status).toBe(422);
+    expect(response.body.error.param).toBe("working_directory");
+    expect(providerExecute).not.toHaveBeenCalled();
   });
 
   it("ignores CURSOR_API_KEY env fallback when X-Gateway-API-Key is present", async () => {

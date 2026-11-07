@@ -1,6 +1,7 @@
 import type { SDKAgent } from "@cursor/sdk";
 import type { NamespacedSessionStore, SessionStore } from "@agent-runtime-gateway/core";
 import { createNamespacedStore } from "@agent-runtime-gateway/core";
+import path from "node:path";
 import type {
   CreateLocalAgentParams,
   CursorClient,
@@ -10,6 +11,7 @@ import type {
 export interface CursorSessionRecord {
   agentId: string;
   touchedAt: number;
+  workingDirectory?: string;
 }
 
 export type SessionRecord = CursorSessionRecord;
@@ -59,7 +61,20 @@ export class CursorSessionManager {
     }
 
     if (existing !== undefined) {
+      const nextCwd = path.resolve(params.workingDirectory);
+      const prevCwd =
+        existing.workingDirectory !== undefined
+          ? path.resolve(existing.workingDirectory)
+          : undefined;
+      if (prevCwd !== undefined && prevCwd !== nextCwd) {
+        this.forget(sessionId);
+        existing = undefined;
+      }
+    }
+
+    if (existing !== undefined) {
       existing.touchedAt = Date.now();
+      existing.workingDirectory = params.workingDirectory;
       if (this.store !== undefined) {
         try {
           await this.store.set(sessionId, existing);
@@ -88,6 +103,7 @@ export class CursorSessionManager {
     const newRecord: CursorSessionRecord = {
       agentId: created.agentId,
       touchedAt: Date.now(),
+      workingDirectory: params.workingDirectory,
     };
     this.sessions.set(sessionId, newRecord);
     if (this.store !== undefined) {
