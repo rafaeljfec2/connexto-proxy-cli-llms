@@ -100,7 +100,7 @@ Provider routes (chat, completions, responses, etc.) resolve the **Cursor API ke
 
 1. **`Authorization: Bearer <token>`** — token must not be `local` or `dummy` (compatibility placeholders).
 2. **`x-api-key: <token>`** — same rules.
-3. **`process.env.CURSOR_API_KEY`** — trimmed; used if headers did not yield a key.
+3. **`process.env.CURSOR_API_KEY`** — trimmed; used if headers did not yield a key **and** the request omits `X-Gateway-API-Key` (direct local clients). When `X-Gateway-API-Key` is set (for example AI Hub), the Cursor key must be sent in `Authorization` or `x-api-key`; the environment fallback is not used.
 
 If no key is resolved, endpoints that call Cursor return **401** with an OpenAI-style error payload (`Missing Cursor API key`).
 
@@ -111,7 +111,7 @@ If no key is resolved, endpoints that call Cursor return **401** with an OpenAI-
 | Cursor API key | Authenticates **to Cursor** for agent execution                 |
 | Gateway token  | Authenticates **to this gateway** before private route handling |
 
-Keep the values different. A gateway token sent only in `X-Gateway-API-Key` is never treated as a Cursor key. `Authorization` and `x-api-key` continue to identify the caller to Cursor or use the configured Cursor fallback.
+Keep the values different. A gateway token sent only in `X-Gateway-API-Key` is never treated as a Cursor key. With `X-Gateway-API-Key`, `Authorization` or `x-api-key` must carry the Cursor key. Without that header, direct local clients may still use the configured `CURSOR_API_KEY` fallback.
 
 ## Session affinity
 

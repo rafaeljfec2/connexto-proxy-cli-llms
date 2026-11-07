@@ -212,6 +212,28 @@ describe("gateway authentication", () => {
     expect(providerExecute).toHaveBeenCalledTimes(1);
   });
 
+  it("ignores CURSOR_API_KEY env fallback when X-Gateway-API-Key is present", async () => {
+    const previousCursorApiKey = process.env.CURSOR_API_KEY;
+    process.env.CURSOR_API_KEY = "env-fallback-should-not-be-used";
+    providerExecute.mockClear();
+    try {
+      const response = await request(createAuthenticatedApp())
+        .post("/v1/chat/completions")
+        .set("X-Gateway-API-Key", gatewayToken)
+        .send({ messages: [{ role: "user", content: "hello" }] });
+
+      expect(response.status).toBe(401);
+      expect(response.body.error.message).toBe("Missing Cursor API key");
+      expect(providerExecute).not.toHaveBeenCalled();
+    } finally {
+      if (previousCursorApiKey === undefined) {
+        delete process.env.CURSOR_API_KEY;
+      } else {
+        process.env.CURSOR_API_KEY = previousCursorApiKey;
+      }
+    }
+  });
+
   it("does not treat a gateway token as a Cursor provider credential", async () => {
     const previousCursorApiKey = process.env.CURSOR_API_KEY;
     providerExecute.mockClear();

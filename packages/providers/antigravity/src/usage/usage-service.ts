@@ -12,6 +12,8 @@ import type {
   AntigravityUsageServiceOptions,
   CloudCodeFetchAvailableModelsResponse,
   CloudCodeLoadCodeAssistResponse,
+  CloudCodeQuotaSummaryBucket,
+  CloudCodeQuotaSummaryGroup,
   CloudCodeRetrieveUserQuotaSummaryResponse,
 } from "./types.js";
 
@@ -229,48 +231,44 @@ export class AntigravityUsageService implements ProviderUsageService {
     const quotas: ProviderQuotaMetric[] = [];
 
     // 1. Process group-level quota buckets from retrieveUserQuotaSummary
-    if (summaryResponse?.groups && Array.isArray(summaryResponse.groups)) {
-      for (const group of summaryResponse.groups) {
-        if (!group || typeof group !== "object" || !Array.isArray(group.buckets)) {
-          continue;
-        }
+    const groups: readonly CloudCodeQuotaSummaryGroup[] =
+      summaryResponse?.groups ?? [];
+    for (const group of groups) {
+      const buckets: readonly CloudCodeQuotaSummaryBucket[] =
+        group.buckets ?? [];
+      const groupName = group.displayName ?? "Model Group";
+      for (const bucket of buckets) {
+        const window = bucket.window ?? "limit";
+        const remainingFraction =
+          typeof bucket.remainingFraction === "number"
+            ? bucket.remainingFraction
+            : null;
+        const resetAt =
+          typeof bucket.resetTime === "string" && bucket.resetTime.length > 0
+            ? bucket.resetTime
+            : null;
 
-        const groupName = group.displayName ?? "Model Group";
-        for (const bucket of group.buckets) {
-          if (!bucket || typeof bucket !== "object") continue;
-
-          const window = bucket.window ?? "limit";
-          const remainingFraction =
-            typeof bucket.remainingFraction === "number"
-              ? bucket.remainingFraction
-              : null;
-          const resetAt =
-            typeof bucket.resetTime === "string" && bucket.resetTime.length > 0
-              ? bucket.resetTime
-              : null;
-
-          quotas.push({
-            id: `group:${groupName}:${window}`,
-            name: `${groupName} (${bucket.displayName ?? window})`,
-            nature: "rate_limit",
-            used: null,
-            limit: null,
-            remaining: null,
-            percentage: null,
-            unit: null,
-            cycle: window,
-            reset_at: resetAt,
-            reported_at: null,
-            scope: "group",
-            remaining_fraction: remainingFraction,
-            raw: {
-              group: groupName,
-              bucketId: bucket.bucketId,
-              window: bucket.window,
-              description: bucket.description,
-            },
-          });
-        }
+        quotas.push({
+          id: `group:${groupName}:${window}`,
+          name: `${groupName} (${bucket.displayName ?? window})`,
+          nature: "rate_limit",
+          used: null,
+          limit: null,
+          remaining: null,
+          percentage: null,
+          unit: null,
+          cycle: window,
+          reset_at: resetAt,
+          reported_at: null,
+          scope: "group",
+          remaining_fraction: remainingFraction,
+          raw: {
+            group: groupName,
+            bucketId: bucket.bucketId,
+            window: bucket.window,
+            description: bucket.description,
+          },
+        });
       }
     }
 

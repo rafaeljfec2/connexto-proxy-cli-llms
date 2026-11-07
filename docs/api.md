@@ -26,7 +26,7 @@ When gateway authentication is enabled, the public endpoints are explicitly limi
 - `GET /v1/models` and `GET /v1/models/:model`
 - `OPTIONS` preflight requests, which do not access route data
 
-All other routes listed below require gateway authentication when a gateway token is configured. In loopback-only mode without a gateway token, the listener is the trust boundary and existing local clients remain unauthenticated. `CURSOR_API_KEY` remains an optional provider fallback and never substitutes for the gateway token.
+All other routes listed below require gateway authentication when a gateway token is configured. In loopback-only mode without a gateway token, the listener is the trust boundary and existing local clients remain unauthenticated. `CURSOR_API_KEY` remains an optional provider fallback for direct local clients (no `X-Gateway-API-Key`) and never substitutes for the gateway token. When `X-Gateway-API-Key` is present, the Cursor key must be sent per request in `Authorization` or `x-api-key`.
 
 ### Consumer identities and resource ownership
 

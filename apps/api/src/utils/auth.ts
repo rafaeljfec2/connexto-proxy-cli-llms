@@ -30,6 +30,13 @@ export function resolveRequestApiKey(req: Request): string | undefined {
     }
   }
 
+  // AI Hub (and other gateways) authenticate with X-Gateway-API-Key; the Cursor key
+  // must arrive per request — never fall back to process env in that mode.
+  const hubGatewayKey = req.get("x-gateway-api-key")?.trim();
+  if (hubGatewayKey !== undefined && hubGatewayKey.length > 0) {
+    return undefined;
+  }
+
   if (process.env.CURSOR_API_KEY && process.env.CURSOR_API_KEY.trim()) {
     return process.env.CURSOR_API_KEY.trim();
   }
