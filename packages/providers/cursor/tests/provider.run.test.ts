@@ -58,6 +58,35 @@ function createTerminalAwareRun() {
 }
 
 describe("CursorProvider run adapter", () => {
+  it("keeps the base Composer model out of the fast variant for local runtime", async () => {
+    const run = createTerminalAwareRun().run;
+    const send = vi.fn(() => Promise.resolve(run));
+    const provider = new CursorProvider({
+      client: {
+        listModels: vi.fn(),
+        createLocalAgent: vi.fn(() =>
+          Promise.resolve({ agentId: "agent_local", send, close: vi.fn() } as never),
+        ),
+        resumeLocalAgent: vi.fn(),
+      },
+    });
+
+    const agentRun = await provider.execute({
+      credential: { type: "cursor_api_key", value: "test-key" },
+      model: "composer-2.5",
+      sessionId: "session-base-composer",
+      message: "hello",
+    });
+    const events = [];
+    for await (const event of agentRun.events) events.push(event.type);
+    await agentRun.wait();
+
+    expect(events).toContain("run.completed");
+    expect(send).toHaveBeenCalledWith("hello", {
+      model: { id: "composer-2.5", params: [{ id: "fast", value: "false" }] },
+    });
+  });
+
   it("shares a single wait result between wait() and terminal stream events", async () => {
     const wait = vi.fn(() =>
       Promise.resolve({

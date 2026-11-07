@@ -10,6 +10,7 @@ import type {
 } from "@agent-runtime-gateway/core";
 import type { Run, SDKAgent } from "@cursor/sdk";
 import { CursorClient } from "./client.js";
+import { cursorModelSelection } from "./model-selection.js";
 import { defaultCursorDeps, defaultCursorEnv, verifyCursorApiKey } from "./cursor.js";
 import type { CursorMe } from "@agent-runtime-gateway/compatibility-openai";
 import { resolveCursorApiKey } from "./credential.js";
@@ -162,7 +163,7 @@ export class CursorProvider implements AgentProvider {
     let run: Run;
     try {
       run = await agent.send(input.message, {
-        model: { id: input.model },
+        model: cursorModelSelection(input.model),
       });
     } catch (error) {
       this.executionGuard?.onExecutionEnd?.({ sessionId: input.sessionId });

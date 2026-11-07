@@ -1,6 +1,6 @@
-import type { ModelSelection } from "@cursor/sdk";
 import { Agent, Cursor, type SDKAgent } from "@cursor/sdk";
 import path from "node:path";
+import { cursorModelSelection } from "./model-selection.js";
 
 export interface CreateLocalAgentParams {
   apiKey: string;
@@ -25,7 +25,7 @@ export class CursorClient {
   async createLocalAgent(params: CreateLocalAgentParams): Promise<SDKAgent> {
     return Agent.create({
       apiKey: params.apiKey,
-      model: toModelSelection(params.model),
+      model: cursorModelSelection(params.model),
       name: params.name,
       local: {
         cwd: path.resolve(params.workingDirectory),
@@ -36,14 +36,10 @@ export class CursorClient {
   async resumeLocalAgent(params: ResumeLocalAgentParams): Promise<SDKAgent> {
     return Agent.resume(params.agentId, {
       apiKey: params.apiKey,
-      model: toModelSelection(params.model),
+      model: cursorModelSelection(params.model),
       local: {
         cwd: path.resolve(params.workingDirectory),
       },
     });
   }
-}
-
-function toModelSelection(model: string): ModelSelection {
-  return { id: model };
 }

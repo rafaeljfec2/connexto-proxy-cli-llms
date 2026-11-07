@@ -86,6 +86,10 @@ describe("createCursorSdkInProcessCompletion", () => {
     for await (const event of completion.stream) events.push(event);
 
     expect(options?.tools).toEqual(["mcp"]);
+    expect(options?.model).toEqual({
+      id: "composer-2.5",
+      params: [{ id: "fast", value: "false" }],
+    });
     expect(options?.mcpServers).toEqual({});
     expect(options?.local?.settingSources).toEqual([]);
     expect(options?.local?.cwd).not.toBe("/ide/project");

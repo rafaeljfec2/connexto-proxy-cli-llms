@@ -19,6 +19,7 @@ import type {
   AgentImageInput,
   CursorClientToolSpec,
 } from "@agent-runtime-gateway/core";
+import { cursorModelSelection } from "./model-selection.js";
 import { CursorProviderError } from "./provider-error.js";
 import type { CursorTextEvent } from "./engine/types.js";
 import type { CursorSdkCompletion } from "./sdk/types.js";
@@ -137,7 +138,7 @@ function createAgentOptions(
   const hasClientTools = Object.keys(customTools).length > 0;
   return {
     apiKey: input.apiKey,
-    model: { id: input.model },
+    model: cursorModelSelection(input.model),
     name: input.agentName,
     mode: "agent",
     tools: hasClientTools ? ["mcp"] : [],
