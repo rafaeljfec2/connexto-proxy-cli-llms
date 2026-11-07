@@ -11,11 +11,9 @@ describe("resolveCollectApiUrl", () => {
       resolveCollectApiUrl(
         DEFAULT_COLLECT_DASHBOARD_URL,
         undefined,
-        "/api/dashboard/v2/usage-status?scope=user",
+        "/api/usage-summary",
       ),
-    ).toBe(
-      "https://grok.com/dashboard/api/dashboard/v2/usage-status?scope=user",
-    );
+    ).toBe("https://cursor.com/dashboard/api/usage-summary");
   });
 
   it("prefers explicit override URL", () => {

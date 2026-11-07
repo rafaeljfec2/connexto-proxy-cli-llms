@@ -29,13 +29,12 @@ import {
 } from "./usage-normalize.js";
 
 const DEFAULT_LOGIN = "https://authenticator.cursor.sh/";
-const DEFAULT_USAGE_PATTERN = /usage-status|get-user-analytics/i;
-/** OAuth may land on cursor.com before usage UI on grok.com/dashboard. */
+const DEFAULT_USAGE_PATTERN =
+  /usage-summary|get-current-period|get-filtered-usage|usage-status|get-user-analytics/i;
+/** OAuth lands on cursor.com; usage APIs use cursor.com session cookies (not grok.com). */
 const DEFAULT_AUTHENTICATED_URL_PATTERN =
   /(^https?:\/\/)?(?:([^/]+\.)?cursor\.com\/(dashboard|settings|agents)|grok\.com\/dashboard)(\/?|$|\?)/i;
-/** Collect-ready only when the usage dashboard (and x.ai cookies) is reachable. */
-const DEFAULT_COLLECT_READY_URL_PATTERN =
-  /(^https?:\/\/)?([^/]+\.)?grok\.com\/dashboard(\/?|$|\?)/i;
+const DEFAULT_COLLECT_READY_URL_PATTERN = DEFAULT_AUTHENTICATED_URL_PATTERN;
 
 export class CursorUsageService {
   private readonly sessionStore: CursorUsageSessionStore;
@@ -94,14 +93,25 @@ export class CursorUsageService {
 
   public async collectUsage(accountId: string): Promise<CursorUsageCollectResult> {
     return this.locks.run(accountId, async () => {
-      if (this.browserPool.hasActiveAuthForAccount(accountId)) {
-        return {
-          status: "authentication_pending",
-          provider: "cursor",
-          accountId,
-        };
-      }
       const session = await this.sessionStore.resolve(accountId);
+      if (this.browserPool.hasActiveAuthForAccount(accountId)) {
+        if (
+          session !== undefined &&
+          session.status === "authenticated" &&
+          isCollectableSessionRecord(
+            session,
+            this.browserPool.hasAuthProfile(accountId),
+          )
+        ) {
+          await this.browserPool.closeAuthSessionsForAccount(accountId);
+        } else {
+          return {
+            status: "authentication_pending",
+            provider: "cursor",
+            accountId,
+          };
+        }
+      }
       const profilePresent = this.browserPool.hasAuthProfile(accountId);
       if (session === undefined || session.status !== "authenticated") {
         if (!profilePresent) {
@@ -434,6 +444,11 @@ export class CursorUsageService {
     );
     const statusResponse = await context.request.get(statusUrl, {
       timeout: this.collectTimeoutMs,
+      headers: {
+        Accept: "application/json",
+        Origin: "https://cursor.com",
+        Referer: `${this.collectDashboardUrl.replace(/\/$/, "")}/`,
+      },
     });
     if (!statusResponse.ok()) {
       if (statusResponse.status() === 401 || statusResponse.status() === 403) {
@@ -451,11 +466,32 @@ export class CursorUsageService {
       DEFAULT_USAGE_ANALYTICS_SUFFIX,
     );
     let analytics: unknown;
-    const analyticsResponse = await context.request.get(analyticsUrl, {
-      timeout: Math.min(this.collectTimeoutMs, 30_000),
-    });
-    if (analyticsResponse.ok()) {
-      analytics = await analyticsResponse.json();
+    if (analyticsUrl.includes("get-current-period-usage")) {
+      const analyticsResponse = await context.request.post(analyticsUrl, {
+        timeout: Math.min(this.collectTimeoutMs, 30_000),
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+          Origin: "https://cursor.com",
+          Referer: `${this.collectDashboardUrl.replace(/\/$/, "")}/`,
+        },
+        data: {},
+      });
+      if (analyticsResponse.ok()) {
+        analytics = await analyticsResponse.json();
+      }
+    } else {
+      const analyticsResponse = await context.request.get(analyticsUrl, {
+        timeout: Math.min(this.collectTimeoutMs, 30_000),
+        headers: {
+          Accept: "application/json",
+          Origin: "https://cursor.com",
+          Referer: `${this.collectDashboardUrl.replace(/\/$/, "")}/`,
+        },
+      });
+      if (analyticsResponse.ok()) {
+        analytics = await analyticsResponse.json();
+      }
     }
 
     return normalizeCursorUsagePayload(usageStatus, analytics);

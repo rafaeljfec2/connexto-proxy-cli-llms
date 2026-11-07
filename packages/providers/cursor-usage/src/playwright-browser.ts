@@ -12,7 +12,7 @@ export interface PlaywrightBrowserOptions {
   readonly chromiumExecutablePath?: string;
   /** When false, opens a visible Chromium window for interactive Cursor OAuth (local dev). */
   readonly authHeadless?: boolean;
-  /** When false, opens a visible window for usage collect (helps pass Cloudflare on grok.com). */
+  /** When false, opens a visible window for usage collect (cursor.com; grok/x.ai is not a supported target). */
   readonly collectHeadless?: boolean;
   /** Explicit --no-sandbox. When unset, headed sessions omit it; headless enables it. */
   readonly chromiumNoSandbox?: boolean;
@@ -170,7 +170,7 @@ export class PlaywrightBrowserPool {
     return false;
   }
 
-  private async closeAuthSessionsForAccount(accountId: string): Promise<void> {
+  public async closeAuthSessionsForAccount(accountId: string): Promise<void> {
     for (const sessionId of [...this.contexts.keys()]) {
       if (this.sessionAccounts.get(sessionId) === accountId) {
         await this.closeAuthSession(sessionId);
@@ -407,7 +407,7 @@ export class PlaywrightBrowserPool {
   }
 
   /**
-   * OAuth often lands on cursor.com/agents; usage APIs live on grok.com/dashboard.
+   * OAuth lands on cursor.com; usage APIs use cursor.com session cookies.
    * Navigate there before capturing storageState or calling dashboard APIs.
    */
   public async primeCollectDashboard(params: {
@@ -423,8 +423,9 @@ export class PlaywrightBrowserPool {
     }
     const current = page.url();
     if (
-      /grok\.com\/dashboard/i.test(current) &&
-      params.urlPattern.test(current)
+      (/cursor\.com\/(dashboard|settings)/i.test(current) ||
+        /grok\.com\/dashboard/i.test(current)) &&
+      !await pageShowsUpstreamBlock(page)
     ) {
       return;
     }

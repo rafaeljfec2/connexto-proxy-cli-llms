@@ -1,10 +1,11 @@
 /** Default dashboard used only by usage collect (not auth login). */
-export const DEFAULT_COLLECT_DASHBOARD_URL = "https://grok.com/dashboard";
+export const DEFAULT_COLLECT_DASHBOARD_URL = "https://cursor.com/dashboard";
 
-export const DEFAULT_USAGE_STATUS_SUFFIX =
-  "/api/dashboard/v2/usage-status?scope=user";
+/** Primary quota endpoint (session cookies from cursor.com OAuth). */
+export const DEFAULT_USAGE_STATUS_SUFFIX = "/api/usage-summary";
 
-export const DEFAULT_USAGE_ANALYTICS_SUFFIX = "/api/dashboard/get-user-analytics";
+export const DEFAULT_USAGE_ANALYTICS_SUFFIX =
+  "/api/dashboard/get-current-period-usage";
 
 export function resolveCollectApiUrl(
   dashboardUrl: string,
@@ -29,8 +30,24 @@ export function normalizeCursorUsagePayload(
       : {};
 
   const weekly = readRecord(status.weeklyIncludedUsage);
-  const usedCents = readNumber(weekly?.usedCents);
-  const budgetCents = readNumber(weekly?.budgetCents);
+  let usedCents = readNumber(weekly?.usedCents);
+  let budgetCents = readNumber(weekly?.budgetCents);
+
+  const individual = readRecord(status.individualUsage);
+  const planUsage = readRecord(individual?.plan);
+  if (usedCents === undefined) {
+    usedCents = readNumber(planUsage?.used);
+  }
+  if (budgetCents === undefined) {
+    budgetCents = readNumber(planUsage?.limit);
+  }
+  const period = readRecord(status.currentPeriod);
+  if (usedCents === undefined) {
+    usedCents = readNumber(period?.usedCents);
+  }
+  if (budgetCents === undefined) {
+    budgetCents = readNumber(period?.limitCents);
+  }
 
   const result: Record<string, unknown> = {
     currency: "USD",

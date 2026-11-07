@@ -65,7 +65,7 @@ describe("Cursor usage session persistence", () => {
     pool.getLiveAuth = vi.fn(
       () =>
         ({
-          page: { url: () => "https://grok.com/dashboard" },
+          page: { url: () => "https://cursor.com/dashboard" },
           context: {},
         }) as never,
     );

@@ -74,7 +74,7 @@ describe("CursorUsageService", () => {
       close: vi.fn(async () => undefined),
       request: {
         get: vi.fn(async (url: string) => {
-          if (String(url).includes("usage-status")) {
+          if (String(url).includes("usage-summary")) {
             return {
               ok: () => true,
               status: () => 200,
@@ -85,6 +85,7 @@ describe("CursorUsageService", () => {
           }
           return { ok: () => false, status: () => 404 };
         }),
+        post: vi.fn(async () => ({ ok: () => false, status: () => 404 })),
       },
     };
     pool.restoreAuthenticatedSession = vi.fn(async () => mockContext as never);
@@ -117,7 +118,7 @@ describe("CursorUsageService", () => {
     expect(result.status).toBe("authentication_required");
   });
 
-  it("stays pending when login lands on grok.com/dashboard without cookies", async () => {
+  it("stays pending when login lands on cursor.com/dashboard without cookies", async () => {
     const store = createNamespacedStore(
       new InMemorySessionStore<CursorUsageSessionRecord>(),
       CURSOR_USAGE_NAMESPACE,
@@ -127,7 +128,7 @@ describe("CursorUsageService", () => {
     pool.getLiveAuth = vi.fn(
       () =>
         ({
-          page: { url: () => "https://grok.com/dashboard" },
+          page: { url: () => "https://cursor.com/dashboard" },
           context: {},
         }) as never,
     );
@@ -158,16 +159,20 @@ describe("CursorUsageService", () => {
           context: {},
         }) as never,
     );
+    pool.pageHasUpstreamChallenge = vi.fn(async () => false);
+    pool.captureStorageState = vi.fn(async () => ({
+      cookies: [],
+      origins: [],
+    }));
 
     const service = new CursorUsageService({ store, browserPool: pool });
     const started = await service.startAuth("acct-agents-only");
     const status = await service.getAuthStatus(started.sessionId);
 
     expect(status.status).toBe("authentication_pending");
-    expect(pool.captureStorageState).not.toHaveBeenCalled();
   });
 
-  it("marks auth complete when login reaches grok.com/dashboard", async () => {
+  it("marks auth complete when login reaches cursor.com/dashboard", async () => {
     const store = createNamespacedStore(
       new InMemorySessionStore<CursorUsageSessionRecord>(),
       CURSOR_USAGE_NAMESPACE,
@@ -177,7 +182,7 @@ describe("CursorUsageService", () => {
     pool.getLiveAuth = vi.fn(
       () =>
         ({
-          page: { url: () => "https://grok.com/dashboard" },
+          page: { url: () => "https://cursor.com/dashboard" },
           context: {},
         }) as never,
     );
@@ -220,6 +225,7 @@ function createStubPool(options: { usageJson?: unknown } = {}): PlaywrightBrowse
   stub.pageHasUpstreamChallenge = vi.fn(async () => false);
   stub.hasActiveAuthForAccount = vi.fn(() => false);
   stub.hasAuthProfile = vi.fn(() => false);
+  stub.closeAuthSessionsForAccount = vi.fn(async () => undefined);
   stub.shutdown = vi.fn();
   return stub;
 }
