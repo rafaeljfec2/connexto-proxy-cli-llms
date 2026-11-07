@@ -340,12 +340,34 @@ export class AntigravityProvider implements AgentProvider {
 }
 
 function createDefaultClient(cwd: string, homeDir?: string): AntigravityAcpClient {
-  const env = homeDir
-    ? {
-        HOME: homeDir,
-        ANTIGRAVITY_APP_DATA_DIR: homeDir,
-      }
-    : undefined;
+  let env: Record<string, string> | undefined;
+  if (homeDir) {
+    const configDir = path.join(homeDir, ".config");
+    const dataDir = path.join(homeDir, ".local", "share");
+    const stateDir = path.join(homeDir, ".local", "state");
+    const cacheDir = path.join(homeDir, ".cache");
+    const runDir = path.join(homeDir, ".run");
+
+    try {
+      fs.mkdirSync(configDir, { recursive: true });
+      fs.mkdirSync(dataDir, { recursive: true });
+      fs.mkdirSync(stateDir, { recursive: true });
+      fs.mkdirSync(cacheDir, { recursive: true });
+      fs.mkdirSync(runDir, { recursive: true });
+    } catch {
+      // ignore
+    }
+
+    env = {
+      HOME: homeDir,
+      ANTIGRAVITY_APP_DATA_DIR: homeDir,
+      XDG_CONFIG_HOME: configDir,
+      XDG_DATA_HOME: dataDir,
+      XDG_STATE_HOME: stateDir,
+      XDG_CACHE_HOME: cacheDir,
+      XDG_RUNTIME_DIR: runDir,
+    };
+  }
   return new AcpClient({
     command: resolveAgyCommand(),
     cwd,

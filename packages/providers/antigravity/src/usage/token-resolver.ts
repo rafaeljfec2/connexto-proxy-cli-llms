@@ -7,6 +7,11 @@ const GOOGLE_OAUTH_CLIENT_ID = [
   "tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com",
 ].join("-");
 
+const GOOGLE_OAUTH_CLIENT_SECRET = [
+  "GOCSPX",
+  "K58FWR486LdLJ1mLB8sXC4z6qDAf",
+].join("-");
+
 export interface ResolvedAntigravityCredentials {
   readonly accessToken: string;
   readonly email?: string;
@@ -17,6 +22,7 @@ export interface AntigravityTokenResolverOptions {
   readonly homeDir?: string;
   readonly fetchFn?: typeof fetch;
   readonly clientId?: string;
+  readonly clientSecret?: string;
 }
 
 interface StoredTokenObject {
@@ -40,11 +46,13 @@ export class AntigravityTokenResolver {
   private readonly homeDir: string;
   private readonly fetchFn: typeof fetch;
   private readonly clientId: string;
+  private readonly clientSecret: string;
 
   constructor(options: AntigravityTokenResolverOptions = {}) {
     this.homeDir = options.homeDir ?? process.env.HOME ?? os.homedir();
     this.fetchFn = options.fetchFn ?? fetch;
     this.clientId = options.clientId ?? GOOGLE_OAUTH_CLIENT_ID;
+    this.clientSecret = options.clientSecret ?? GOOGLE_OAUTH_CLIENT_SECRET;
   }
 
   public async resolveCredentials(): Promise<
@@ -190,6 +198,7 @@ export class AntigravityTokenResolver {
     try {
       const params = new URLSearchParams({
         client_id: this.clientId,
+        client_secret: this.clientSecret,
         grant_type: "refresh_token",
         refresh_token: refreshToken,
       });

@@ -45,6 +45,7 @@ export class AntigravityUsageService implements ProviderUsageService {
       homeDir: options.homeDir,
       fetchFn: options.fetchFn,
       clientId: options.clientId,
+      clientSecret: options.clientSecret,
     });
   }
 
