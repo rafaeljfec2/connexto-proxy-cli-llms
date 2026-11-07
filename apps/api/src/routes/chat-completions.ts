@@ -28,6 +28,12 @@ import {
   executionImagesInput,
   resolveExecutionImages,
 } from "../utils/antigravity-images.js";
+import {
+  getConfiguredDefaultWorkingDirectory,
+  isHubIntegratedRequest,
+  providerRequiresLocalWorkspace,
+  resolveExecutionWorkingDirectory,
+} from "../utils/execution-working-directory.js";
 
 export function registerChatCompletionRoutes(app: Express): void {
   app.post(
@@ -92,6 +98,27 @@ export function registerChatCompletionRoutes(app: Express): void {
         const created = Math.floor(Date.now() / 1000);
         const sessionAffinity = resolveSessionAffinity(req, id, principal);
 
+        const hubIntegrated = isHubIntegratedRequest(req);
+        const workingDirectory = resolveExecutionWorkingDirectory({
+          hubIntegrated,
+          configuredDefault: getConfiguredDefaultWorkingDirectory(),
+          toolContext: prepared.toolContext,
+        });
+        if (
+          hubIntegrated &&
+          providerRequiresLocalWorkspace(target.providerId) &&
+          workingDirectory === undefined
+        ) {
+          res.status(422).json(
+            openAiErrorPayload(
+              "Agent workspace could not be resolved from the request. Include IDE working-directory context in messages.",
+              "invalid_request_error",
+              "working_directory",
+            ),
+          );
+          return;
+        }
+
         const services = getGatewayServices();
         const providerStart = performance.now();
         const run = await services.executor.execute(target.providerId, {
@@ -100,6 +127,7 @@ export function registerChatCompletionRoutes(app: Express): void {
           message: prepared.prompt.text,
           credential,
           signal: cancellation.signal,
+          ...(workingDirectory !== undefined ? { workingDirectory } : {}),
           ...executionImagesInput(images),
         });
 

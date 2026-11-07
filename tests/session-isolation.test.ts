@@ -13,6 +13,7 @@ import {
   LOCAL_PRINCIPAL,
   principalFromCredential,
 } from "../apps/api/src/utils/identity.js";
+import { codexWorkspaceInstructions } from "./helpers/codex-workspace.js";
 
 const consumerTokenA = "synthetic-gateway-token-A";
 const consumerTokenB = "synthetic-gateway-token-B";
@@ -53,7 +54,11 @@ function requestAs(app: ReturnType<typeof createIsolatedApp>, consumer: "A" | "B
         .set(gatewayHeaders)
         .set("Authorization", `Bearer ${cursorKey}`)
         .set(headers)
-        .send({ input: "hello", ...body }),
+        .send({
+          instructions: codexWorkspaceInstructions,
+          input: "hello",
+          ...body,
+        }),
     get: (path: string) => request(app).get(path).set(gatewayHeaders),
     cancel: (id: string) =>
       request(app).post(`/v1/responses/${id}/cancel`).set(gatewayHeaders),
