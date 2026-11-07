@@ -12,6 +12,7 @@ import type {
   AntigravityUsageServiceOptions,
   CloudCodeFetchAvailableModelsResponse,
   CloudCodeLoadCodeAssistResponse,
+  CloudCodeRetrieveUserQuotaSummaryResponse,
 } from "./types.js";
 
 const DEFAULT_CLOUD_CODE_ENDPOINT = "https://cloudcode-pa.googleapis.com";
@@ -88,12 +89,10 @@ export class AntigravityUsageService implements ProviderUsageService {
 
     // 2. Fetch models quota and account info from official Cloud Code PA upstream
     try {
-      const { modelsResponse, loadCodeAssistResponse } = await this.fetchUpstreamData(
-        accessToken,
-        options?.signal,
-      );
+      const { modelsResponse, loadCodeAssistResponse, quotaSummaryResponse } =
+        await this.fetchUpstreamData(accessToken, options?.signal);
 
-      const quotas = this.parseQuotas(modelsResponse);
+      const quotas = this.parseQuotas(modelsResponse, quotaSummaryResponse);
       const account = this.parseAccount(loadCodeAssistResponse, detectedEmail);
 
       return {
@@ -116,6 +115,7 @@ export class AntigravityUsageService implements ProviderUsageService {
   ): Promise<{
     modelsResponse: CloudCodeFetchAvailableModelsResponse;
     loadCodeAssistResponse?: CloudCodeLoadCodeAssistResponse;
+    quotaSummaryResponse?: CloudCodeRetrieveUserQuotaSummaryResponse;
   }> {
     const timeoutSignal = AbortSignal.timeout(this.timeoutMs);
     const combinedSignal = callerSignal
@@ -128,7 +128,7 @@ export class AntigravityUsageService implements ProviderUsageService {
       "User-Agent": this.userAgent,
     };
 
-    // Parallel calls: models and code assist
+    // Parallel calls: models, code assist, and quota summary
     const modelsPromise = this.fetchWithFallback<CloudCodeFetchAvailableModelsResponse>(
       "/v1internal:fetchAvailableModels",
       headers,
@@ -142,14 +142,24 @@ export class AntigravityUsageService implements ProviderUsageService {
         combinedSignal,
       ).catch(() => undefined);
 
-    const [modelsResponse, loadCodeAssistResponse] = await Promise.all([
-      modelsPromise,
-      loadCodeAssistPromise,
-    ]);
+    const quotaSummaryPromise =
+      this.fetchWithFallback<CloudCodeRetrieveUserQuotaSummaryResponse>(
+        "/v1internal:retrieveUserQuotaSummary",
+        headers,
+        combinedSignal,
+      ).catch(() => undefined);
+
+    const [modelsResponse, loadCodeAssistResponse, quotaSummaryResponse] =
+      await Promise.all([
+        modelsPromise,
+        loadCodeAssistPromise,
+        quotaSummaryPromise,
+      ]);
 
     return {
       modelsResponse,
       loadCodeAssistResponse,
+      quotaSummaryResponse,
     };
   }
 
@@ -214,45 +224,91 @@ export class AntigravityUsageService implements ProviderUsageService {
 
   private parseQuotas(
     response: CloudCodeFetchAvailableModelsResponse,
+    summaryResponse?: CloudCodeRetrieveUserQuotaSummaryResponse,
   ): readonly ProviderQuotaMetric[] {
-    const models = response.models;
-    if (!models || typeof models !== "object") {
-      return [];
-    }
-
     const quotas: ProviderQuotaMetric[] = [];
 
-    for (const [modelId, details] of Object.entries(models)) {
-      if (!details || typeof details !== "object") {
-        continue;
+    // 1. Process group-level quota buckets from retrieveUserQuotaSummary
+    if (summaryResponse?.groups && Array.isArray(summaryResponse.groups)) {
+      for (const group of summaryResponse.groups) {
+        if (!group || typeof group !== "object" || !Array.isArray(group.buckets)) {
+          continue;
+        }
+
+        const groupName = group.displayName ?? "Model Group";
+        for (const bucket of group.buckets) {
+          if (!bucket || typeof bucket !== "object") continue;
+
+          const window = bucket.window ?? "limit";
+          const remainingFraction =
+            typeof bucket.remainingFraction === "number"
+              ? bucket.remainingFraction
+              : null;
+          const resetAt =
+            typeof bucket.resetTime === "string" && bucket.resetTime.length > 0
+              ? bucket.resetTime
+              : null;
+
+          quotas.push({
+            id: `group:${groupName}:${window}`,
+            name: `${groupName} (${bucket.displayName ?? window})`,
+            nature: "rate_limit",
+            used: null,
+            limit: null,
+            remaining: null,
+            percentage: null,
+            unit: null,
+            cycle: window,
+            reset_at: resetAt,
+            reported_at: null,
+            scope: "group",
+            remaining_fraction: remainingFraction,
+            raw: {
+              group: groupName,
+              bucketId: bucket.bucketId,
+              window: bucket.window,
+              description: bucket.description,
+            },
+          });
+        }
       }
+    }
 
-      const quotaInfo = details.quotaInfo;
-      const remainingFraction =
-        typeof quotaInfo?.remainingFraction === "number"
-          ? quotaInfo.remainingFraction
-          : null;
-      const resetAt =
-        typeof quotaInfo?.resetTime === "string" && quotaInfo.resetTime.length > 0
-          ? quotaInfo.resetTime
-          : null;
+    // 2. Process model-level quotas from fetchAvailableModels
+    const models = response.models;
+    if (models && typeof models === "object") {
+      for (const [modelId, details] of Object.entries(models)) {
+        if (!details || typeof details !== "object") {
+          continue;
+        }
 
-      quotas.push({
-        id: modelId,
-        name: details.displayName ?? modelId,
-        nature: "rate_limit",
-        used: null,
-        limit: null,
-        remaining: null,
-        percentage: null,
-        unit: null,
-        cycle: null,
-        reset_at: resetAt,
-        reported_at: null,
-        scope: "model",
-        remaining_fraction: remainingFraction,
-        raw: quotaInfo && typeof quotaInfo === "object" ? { ...quotaInfo } : null,
-      });
+        const quotaInfo = details.quotaInfo;
+        const remainingFraction =
+          typeof quotaInfo?.remainingFraction === "number"
+            ? quotaInfo.remainingFraction
+            : null;
+        const resetAt =
+          typeof quotaInfo?.resetTime === "string" && quotaInfo.resetTime.length > 0
+            ? quotaInfo.resetTime
+            : null;
+
+        quotas.push({
+          id: modelId,
+          name: details.displayName ?? modelId,
+          nature: "rate_limit",
+          used: null,
+          limit: null,
+          remaining: null,
+          percentage: null,
+          unit: null,
+          cycle: null,
+          reset_at: resetAt,
+          reported_at: null,
+          scope: "model",
+          remaining_fraction: remainingFraction,
+          raw: quotaInfo && typeof quotaInfo === "object" ? { ...quotaInfo } : null,
+        });
+      }
     }
 
     return quotas;

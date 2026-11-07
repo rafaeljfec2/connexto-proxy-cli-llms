@@ -35,6 +35,29 @@ export interface CloudCodeLoadCodeAssistResponse {
   readonly [key: string]: unknown;
 }
 
+export interface CloudCodeQuotaSummaryBucket {
+  readonly bucketId?: string;
+  readonly displayName?: string;
+  readonly window?: string;
+  readonly resetTime?: string;
+  readonly description?: string;
+  readonly remainingFraction?: number;
+  readonly [key: string]: unknown;
+}
+
+export interface CloudCodeQuotaSummaryGroup {
+  readonly displayName?: string;
+  readonly description?: string;
+  readonly buckets?: readonly CloudCodeQuotaSummaryBucket[];
+  readonly [key: string]: unknown;
+}
+
+export interface CloudCodeRetrieveUserQuotaSummaryResponse {
+  readonly groups?: readonly CloudCodeQuotaSummaryGroup[];
+  readonly description?: string;
+  readonly [key: string]: unknown;
+}
+
 export interface AntigravityUsageServiceOptions {
   /** Primary upstream endpoint for Google Cloud Code internal PA. */
   readonly endpoint?: string;

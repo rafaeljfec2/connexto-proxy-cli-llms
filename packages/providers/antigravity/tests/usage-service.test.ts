@@ -223,4 +223,71 @@ describe("AntigravityUsageService Unit Test Suite", () => {
     expect(snapshot.account?.email).toBe("user@example.com");
     expect(snapshot.account?.tier).toBeNull();
   });
+
+  it("fetches and integrates retrieveUserQuotaSummary group buckets into quotas", async () => {
+    const summaryResponse = {
+      groups: [
+        {
+          displayName: "Claude and GPT models",
+          buckets: [
+            {
+              bucketId: "3p-weekly",
+              displayName: "Weekly Limit Remaining",
+              window: "weekly",
+              resetTime: "2026-11-12T00:46:33Z",
+              remainingFraction: 0.4772592,
+            },
+            {
+              bucketId: "3p-5h",
+              displayName: "Five Hour Limit Remaining",
+              window: "5h",
+              resetTime: "2026-11-07T05:51:19Z",
+              remainingFraction: 1.0,
+            },
+          ],
+        },
+      ],
+    };
+
+    const mockFetch = vi.fn().mockImplementation((url: string) => {
+      if (url.includes(":fetchAvailableModels")) {
+        return Promise.resolve(
+          new Response(JSON.stringify(FIXTURE_MODELS_RESPONSE), { status: 200 }),
+        );
+      }
+      if (url.includes(":loadCodeAssist")) {
+        return Promise.resolve(
+          new Response(JSON.stringify(FIXTURE_CODE_ASSIST_RESPONSE), { status: 200 }),
+        );
+      }
+      if (url.includes(":retrieveUserQuotaSummary")) {
+        return Promise.resolve(
+          new Response(JSON.stringify(summaryResponse), { status: 200 }),
+        );
+      }
+      return Promise.resolve(new Response("Not Found", { status: 404 }));
+    });
+
+    const service = new AntigravityUsageService({
+      tokenResolver: () => Promise.resolve("valid-token"),
+      accountDetector: () => Promise.resolve("user@example.com"),
+      fetchFn: mockFetch,
+    });
+
+    const snapshot = await service.getUsage();
+
+    expect(snapshot.status).toBe("available");
+    const groupMetrics = snapshot.quotas.filter((q) => q.scope === "group");
+    expect(groupMetrics.length).toBe(2);
+
+    const weekly = groupMetrics.find((q) => q.cycle === "weekly");
+    expect(weekly).toBeDefined();
+    expect(weekly?.remaining_fraction).toBeCloseTo(0.4772592);
+    expect(weekly?.reset_at).toBe("2026-11-12T00:46:33Z");
+
+    const fiveHour = groupMetrics.find((q) => q.cycle === "5h");
+    expect(fiveHour).toBeDefined();
+    expect(fiveHour?.remaining_fraction).toBe(1.0);
+    expect(fiveHour?.reset_at).toBe("2026-11-07T05:51:19Z");
+  });
 });
