@@ -1,10 +1,21 @@
 import type { ProviderCredential } from "./model.js";
 
+export interface AgentImageInput {
+  readonly mimeType: string;
+  /** Base64 payload of the image. */
+  readonly data: string;
+}
+
 export interface AgentExecutionInput {
   credential: ProviderCredential;
   model: string;
   sessionId: string;
   message: string;
+  /**
+   * Optional normalized image content (providers without image support ignore
+   * it). Providers receiving them forward the blocks to the upstream runtime.
+   */
+  images?: readonly AgentImageInput[];
   workingDirectory?: string;
   signal?: AbortSignal;
 }

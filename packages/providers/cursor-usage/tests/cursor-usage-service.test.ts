@@ -2,7 +2,10 @@ import { describe, expect, it, vi } from "vitest";
 import type { BrowserContext } from "playwright-core";
 import { CursorUsageService } from "../src/cursor-usage-service.js";
 import { PlaywrightBrowserPool } from "../src/playwright-browser.js";
-import { InMemorySessionStore, createNamespacedStore } from "@agent-runtime-gateway/core";
+import {
+  InMemorySessionStore,
+  createNamespacedStore,
+} from "@agent-runtime-gateway/core";
 import type { CursorUsageSessionRecord } from "../src/types.js";
 import { CURSOR_USAGE_NAMESPACE } from "../src/types.js";
 
@@ -38,9 +41,11 @@ describe("CursorUsageService", () => {
       storageState: { cookies: [cursorDomainCookie], origins: [] },
     });
 
-    const pool = createStubPool({
-      usageJson: { used: 12, limit: 100 },
-    });
+    const pool = createStubPool();
+    const waitForUsageJson = vi.fn(() =>
+      Promise.resolve<Record<string, unknown>>({ used: 12, limit: 100 }),
+    );
+    pool.waitForUsageJson = waitForUsageJson;
 
     const service = new CursorUsageService({
       store,
@@ -50,7 +55,7 @@ describe("CursorUsageService", () => {
     const result = await service.collectUsage("acct-2");
     expect(result.status).toBe("available");
     expect(result.usage).toEqual({ used: 12, limit: 100 });
-    expect(pool.waitForUsageJson).toHaveBeenCalled();
+    expect(waitForUsageJson).toHaveBeenCalled();
   });
 
   it("prefers dashboard API when usage-status responds ok", async () => {
@@ -66,29 +71,44 @@ describe("CursorUsageService", () => {
     });
 
     const pool = createStubPool();
-    const mockContext = {
-      storageState: vi.fn(async () => ({
-        cookies: [cursorDomainCookie],
-        origins: [],
-      })),
-      close: vi.fn(async () => undefined),
-      request: {
-        get: vi.fn(async (url: string) => {
-          if (String(url).includes("usage-summary")) {
-            return {
-              ok: () => true,
-              status: () => 200,
-              json: async () => ({
-                weeklyIncludedUsage: { usedCents: 4168, budgetCents: 4615 },
-              }),
-            };
-          }
-          return { ok: () => false, status: () => 404 };
+    type FakeUsageResponse = {
+      ok: () => boolean;
+      status: () => number;
+      json?: () => Promise<{
+        weeklyIncludedUsage: { usedCents: number; budgetCents: number };
+      }>;
+    };
+    const usageResponse: FakeUsageResponse = {
+      ok: () => true,
+      status: () => 200,
+      json: () =>
+        Promise.resolve({
+          weeklyIncludedUsage: { usedCents: 4168, budgetCents: 4615 },
         }),
-        post: vi.fn(async () => ({ ok: () => false, status: () => 404 })),
+    };
+    const missingResponse: FakeUsageResponse = {
+      ok: () => false,
+      status: () => 404,
+    };
+    const mockContext = {
+      storageState: vi.fn(() => ({ cookies: [cursorDomainCookie], origins: [] })),
+      close: vi.fn(() => undefined),
+      request: {
+        get: vi.fn((url: string): Promise<FakeUsageResponse> =>
+          String(url).includes("usage-summary")
+            ? Promise.resolve(usageResponse)
+            : Promise.resolve(missingResponse),
+        ),
+        post: vi.fn((): Promise<FakeUsageResponse> =>
+          Promise.resolve({ ok: () => false, status: () => 404 }),
+        ),
       },
     };
-    pool.restoreAuthenticatedSession = vi.fn(async () => mockContext as never);
+    const waitForUsageJson = vi.fn(() => Promise.resolve<Record<string, unknown>>({}));
+    pool.waitForUsageJson = waitForUsageJson;
+    pool.restoreAuthenticatedSession = vi.fn(() =>
+      Promise.resolve(mockContext as never),
+    );
 
     const service = new CursorUsageService({ store, browserPool: pool });
     const result = await service.collectUsage("acct-api");
@@ -96,7 +116,7 @@ describe("CursorUsageService", () => {
     expect(result.status).toBe("available");
     expect(result.usage?.total_usage).toBe(41.68);
     expect(result.usage?.total_credits).toBe(46.15);
-    expect(pool.waitForUsageJson).not.toHaveBeenCalled();
+    expect(waitForUsageJson).not.toHaveBeenCalled();
   });
 
   it("returns authentication_required when session cookies are not usable", async () => {
@@ -124,7 +144,7 @@ describe("CursorUsageService", () => {
       CURSOR_USAGE_NAMESPACE,
     );
     const pool = createStubPool();
-    pool.openAuthSession = vi.fn(async () => ({}) as never);
+    pool.openAuthSession = vi.fn(() => Promise.resolve({} as never));
     pool.getLiveAuth = vi.fn(
       () =>
         ({
@@ -132,11 +152,10 @@ describe("CursorUsageService", () => {
           context: {},
         }) as never,
     );
-    pool.captureStorageState = vi.fn(async () => ({
-      cookies: [],
-      origins: [],
-    }));
-    pool.closeAuthSession = vi.fn(async () => undefined);
+    pool.captureStorageState = vi.fn(() =>
+      Promise.resolve({ cookies: [], origins: [] }),
+    );
+    pool.closeAuthSession = vi.fn(() => Promise.resolve());
 
     const service = new CursorUsageService({ store, browserPool: pool });
     const started = await service.startAuth("acct-grok");
@@ -151,7 +170,7 @@ describe("CursorUsageService", () => {
       CURSOR_USAGE_NAMESPACE,
     );
     const pool = createStubPool();
-    pool.openAuthSession = vi.fn(async () => ({}) as never);
+    pool.openAuthSession = vi.fn(() => Promise.resolve({} as never));
     pool.getLiveAuth = vi.fn(
       () =>
         ({
@@ -159,11 +178,10 @@ describe("CursorUsageService", () => {
           context: {},
         }) as never,
     );
-    pool.pageHasUpstreamChallenge = vi.fn(async () => false);
-    pool.captureStorageState = vi.fn(async () => ({
-      cookies: [],
-      origins: [],
-    }));
+    pool.pageHasUpstreamChallenge = vi.fn(() => Promise.resolve(false));
+    pool.captureStorageState = vi.fn(() =>
+      Promise.resolve({ cookies: [], origins: [] }),
+    );
 
     const service = new CursorUsageService({ store, browserPool: pool });
     const started = await service.startAuth("acct-agents-only");
@@ -178,7 +196,7 @@ describe("CursorUsageService", () => {
       CURSOR_USAGE_NAMESPACE,
     );
     const pool = createStubPool();
-    pool.openAuthSession = vi.fn(async () => ({}) as never);
+    pool.openAuthSession = vi.fn(() => Promise.resolve({} as never));
     pool.getLiveAuth = vi.fn(
       () =>
         ({
@@ -186,28 +204,28 @@ describe("CursorUsageService", () => {
           context: {},
         }) as never,
     );
-    pool.pageHasUpstreamChallenge = vi.fn(async () => false);
-    pool.captureStorageState = vi.fn(async () => ({
-      cookies: [cursorDomainCookie],
-      origins: [],
-    }));
-    pool.closeAuthSession = vi.fn(async () => undefined);
+    pool.pageHasUpstreamChallenge = vi.fn(() => Promise.resolve(false));
+    const captureStorageState = vi.fn(() =>
+      Promise.resolve({ cookies: [cursorDomainCookie], origins: [] }),
+    );
+    pool.captureStorageState = captureStorageState;
+    pool.closeAuthSession = vi.fn(() => Promise.resolve());
 
     const service = new CursorUsageService({ store, browserPool: pool });
     const started = await service.startAuth("acct-social");
     const status = await service.getAuthStatus(started.sessionId);
 
     expect(status.status).toBe("authenticated");
-    expect(pool.captureStorageState).toHaveBeenCalledWith(started.sessionId);
+    expect(captureStorageState).toHaveBeenCalledWith(started.sessionId);
   });
 });
 
-function createStubPool(options: { usageJson?: unknown } = {}): PlaywrightBrowserPool {
+function createStubPool(): PlaywrightBrowserPool {
   const mockContext = {
-    storageState: vi.fn(async () => ({ cookies: [], origins: [] })),
-    close: vi.fn(async () => undefined),
+    storageState: vi.fn(() => ({ cookies: [], origins: [] })),
+    close: vi.fn(() => undefined),
     request: {
-      get: vi.fn(async () => ({
+      get: vi.fn(() => ({
         ok: () => false,
         status: () => 404,
       })),
@@ -215,17 +233,17 @@ function createStubPool(options: { usageJson?: unknown } = {}): PlaywrightBrowse
   } as unknown as BrowserContext;
 
   const stub = Object.create(PlaywrightBrowserPool.prototype) as PlaywrightBrowserPool;
-  stub.restoreAuthenticatedSession = vi.fn(async () => mockContext);
-  stub.primeCollectDashboard = vi.fn(async () => undefined);
-  stub.waitForUsageJson = vi.fn(async () => options.usageJson ?? {});
+  stub.restoreAuthenticatedSession = vi.fn(() => Promise.resolve(mockContext));
+  stub.primeCollectDashboard = vi.fn(() => Promise.resolve());
+  stub.waitForUsageJson = vi.fn(() => Promise.resolve({}));
   stub.openAuthSession = vi.fn();
   stub.getLiveAuth = vi.fn();
   stub.closeAuthSession = vi.fn();
   stub.captureStorageState = vi.fn();
-  stub.pageHasUpstreamChallenge = vi.fn(async () => false);
+  stub.pageHasUpstreamChallenge = vi.fn(() => Promise.resolve(false));
   stub.hasActiveAuthForAccount = vi.fn(() => false);
   stub.hasAuthProfile = vi.fn(() => false);
-  stub.closeAuthSessionsForAccount = vi.fn(async () => undefined);
+  stub.closeAuthSessionsForAccount = vi.fn(() => Promise.resolve());
   stub.shutdown = vi.fn();
   return stub;
 }

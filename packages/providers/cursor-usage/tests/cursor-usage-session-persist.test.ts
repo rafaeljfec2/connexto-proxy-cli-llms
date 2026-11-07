@@ -27,9 +27,7 @@ describe("Cursor usage session persistence", () => {
   let sessionDir: string;
 
   beforeEach(async () => {
-    sessionDir = await fs.mkdtemp(
-      path.join(os.tmpdir(), "cursor-usage-session-"),
-    );
+    sessionDir = await fs.mkdtemp(path.join(os.tmpdir(), "cursor-usage-session-"));
   });
 
   afterEach(async () => {
@@ -43,7 +41,6 @@ describe("Cursor usage session persistence", () => {
     const store = createNamespacedStore(fsStore, CURSOR_USAGE_NAMESPACE);
 
     const pool = createStubPool();
-    const service1 = new CursorUsageService({ store, browserPool: pool });
     await store.set("acct-disk", {
       accountId: "acct-disk",
       status: "authenticated",
@@ -69,26 +66,26 @@ describe("Cursor usage session persistence", () => {
           context: {},
         }) as never,
     );
-    pool.captureStorageState = vi.fn(async () => ({
-      cookies: [],
-      origins: [],
-    }));
+    const captureStorageState = vi.fn(() =>
+      Promise.resolve({ cookies: [], origins: [] }),
+    );
+    pool.captureStorageState = captureStorageState;
 
     const service = new CursorUsageService({ store, browserPool: pool });
     const started = await service.startAuth("acct-empty");
     const status = await service.getAuthStatus(started.sessionId);
 
     expect(status.status).toBe("authentication_pending");
-    expect(pool.captureStorageState).toHaveBeenCalled();
+    expect(captureStorageState).toHaveBeenCalled();
   });
 });
 
 function createStubPool(): PlaywrightBrowserPool {
   const stub = Object.create(PlaywrightBrowserPool.prototype) as PlaywrightBrowserPool;
-  stub.openAuthSession = vi.fn(async () => ({}) as never);
+  stub.openAuthSession = vi.fn(() => Promise.resolve({} as never));
   stub.getLiveAuth = vi.fn();
   stub.captureStorageState = vi.fn();
-  stub.closeAuthSession = vi.fn(async () => undefined);
+  stub.closeAuthSession = vi.fn(() => Promise.resolve());
   stub.shutdown = vi.fn();
   return stub;
 }

@@ -2,6 +2,7 @@ export type { AgentProvider } from "./contracts/agent-provider.js";
 export type {
   AgentEvent,
   AgentExecutionInput,
+  AgentImageInput,
   AgentResult,
   AgentRun,
   AgentRunStatus,

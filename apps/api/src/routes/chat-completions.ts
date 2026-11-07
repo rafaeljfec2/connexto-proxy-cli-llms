@@ -20,10 +20,14 @@ import { getLogger } from "../utils/logger.js";
 import { sendHttpError } from "../utils/error-handler.js";
 import { createRequestCancellation } from "../utils/request-cancellation.js";
 import {
-  assertAntigravityTextOnly,
+  assertAntigravityToolsUnsupported,
   providerCredential,
   resolveProviderTarget,
 } from "../utils/provider-target.js";
+import {
+  executionImagesInput,
+  resolveExecutionImages,
+} from "../utils/antigravity-images.js";
 
 export function registerChatCompletionRoutes(app: Express): void {
   app.post(
@@ -63,11 +67,7 @@ export function registerChatCompletionRoutes(app: Express): void {
           return;
         }
 
-        assertAntigravityTextOnly(
-          target,
-          prepared.prompt.images?.length ?? 0,
-          prepared.tools.length,
-        );
+        assertAntigravityToolsUnsupported(target, prepared.tools.length);
 
         const apiKey =
           target.providerId === "cursor" ? resolveRequestApiKey(req) : undefined;
@@ -82,6 +82,11 @@ export function registerChatCompletionRoutes(app: Express): void {
           return;
         }
         const credential = providerCredential(target, apiKey);
+        const images = await resolveExecutionImages(
+          target,
+          prepared.prompt.images,
+          cancellation.signal,
+        );
 
         const id = `chatcmpl_${crypto.randomUUID().replaceAll("-", "")}`;
         const created = Math.floor(Date.now() / 1000);
@@ -95,6 +100,7 @@ export function registerChatCompletionRoutes(app: Express): void {
           message: prepared.prompt.text,
           credential,
           signal: cancellation.signal,
+          ...executionImagesInput(images),
         });
 
         if (cancellation.signal.aborted) return;

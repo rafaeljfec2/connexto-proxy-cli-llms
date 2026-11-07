@@ -1,5 +1,6 @@
 import type { AgentExecutionInput, AgentEvent } from "@agent-runtime-gateway/core";
 import { InMemorySessionStore } from "@agent-runtime-gateway/core";
+import type { ContentBlock } from "@agent-runtime-gateway/provider-antigravity/acp";
 import type { AcpSessionRecord } from "../src/session-store.js";
 import type {
   AgentTurnResult,
@@ -11,6 +12,7 @@ import { AntigravityProvider, type AntigravityAcpClient } from "../src/provider.
 
 class FakeAcpClient implements AntigravityAcpClient {
   public readonly calls: string[] = [];
+  public lastBlocks?: readonly ContentBlock[];
   public onPrompt: (options: RunAgentTurnOptions) => Promise<AgentTurnResult> = (
     options,
   ) => {
@@ -58,10 +60,11 @@ class FakeAcpClient implements AntigravityAcpClient {
 
   public prompt(
     sessionId: string,
-    _blocks: Parameters<AntigravityAcpClient["prompt"]>[1],
+    blocks: Parameters<AntigravityAcpClient["prompt"]>[1],
     options: RunAgentTurnOptions,
   ): Promise<AgentTurnResult> {
     this.calls.push(`prompt:${sessionId}`);
+    this.lastBlocks = blocks;
     return this.onPrompt(options);
   }
 
@@ -109,6 +112,36 @@ describe("AntigravityProvider", () => {
       "antigravity:gpt-oss-120b-medium",
     ]);
     expect(clientFactory).not.toHaveBeenCalled();
+  });
+
+  it("appends image content blocks after the text block", async () => {
+    const client = new FakeAcpClient();
+    const provider = new AntigravityProvider({ clientFactory: () => client });
+
+    await provider.execute(
+      input({
+        message: "Describe these images",
+        images: [
+          { mimeType: "image/png", data: "AAAAAFBO" },
+          { mimeType: "image/jpeg", data: "AAABAAA" },
+        ],
+      }),
+    );
+
+    expect(client.lastBlocks).toEqual([
+      { type: "text", text: "Describe these images" },
+      { type: "image", mimeType: "image/png", data: "AAAAAFBO" },
+      { type: "image", mimeType: "image/jpeg", data: "AAABAAA" },
+    ]);
+  });
+
+  it("sends a text-only block list when no images are provided", async () => {
+    const client = new FakeAcpClient();
+    const provider = new AntigravityProvider({ clientFactory: () => client });
+
+    await provider.execute(input());
+
+    expect(client.lastBlocks).toEqual([{ type: "text", text: "Hello" }]);
   });
 
   it("streams ACP message chunks and resumes the mapped session on the next run", async () => {

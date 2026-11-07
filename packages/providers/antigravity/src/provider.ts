@@ -16,6 +16,7 @@ import {
   AGY_CLI_PATH_ENV,
   DEFAULT_AGY_BINARY,
   defaultAgyPathCandidates,
+  imageBlock,
   textBlock,
 } from "./acp/index.js";
 import {
@@ -299,7 +300,7 @@ export class AntigravityProvider implements AgentProvider {
   ): Promise<AgentResult> {
     let result: AgentResult;
     try {
-      const turn = await client.prompt(acpSessionId, [textBlock(input.message)], {
+      const turn = await client.prompt(acpSessionId, promptBlocksFor(input), {
         timeoutMs: DEFAULT_PROMPT_TURN_TIMEOUT_MS,
         onEvent: (kind, update) => {
           const event = mapAcpUpdateToEvent(runId, kind, update);
@@ -549,6 +550,14 @@ async function terminatePreservingCause(
       "Antigravity setup and ACP process cleanup failed.",
     );
   }
+}
+
+function promptBlocksFor(input: AgentExecutionInput): readonly ContentBlock[] {
+  const blocks: ContentBlock[] = [textBlock(input.message)];
+  for (const image of input.images ?? []) {
+    blocks.push(imageBlock(image.mimeType, image.data));
+  }
+  return blocks;
 }
 
 function isCancelResult(turn: AgentTurnResult, cancelRequested: boolean): boolean {

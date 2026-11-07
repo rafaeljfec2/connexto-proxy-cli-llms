@@ -232,8 +232,6 @@ export class AntigravityAuthManager {
 
     let detectedAccount: string | undefined;
 
-    let tokenExchangeError: Error | undefined;
-
     if (this.tokenExchanger && operation.codeVerifier && operation.redirectUri) {
       try {
         const tokens = await this.tokenExchanger({

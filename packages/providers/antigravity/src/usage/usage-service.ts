@@ -17,10 +17,12 @@ import type {
   CloudCodeRetrieveUserQuotaSummaryResponse,
 } from "./types.js";
 
-const DEFAULT_CLOUD_CODE_ENDPOINT = "https://cloudcode-pa.googleapis.com";
-const DEFAULT_FALLBACK_ENDPOINT = "https://daily-cloudcode-pa.googleapis.com";
+const DEFAULT_CLOUD_CODE_ENDPOINT =
+  process.env.ANTIGRAVITY_CLOUD_CODE_ENDPOINT ??
+  "https://daily-cloudcode-pa.googleapis.com";
+const DEFAULT_FALLBACK_ENDPOINT = "https://cloudcode-pa.googleapis.com";
 const DEFAULT_TIMEOUT_MS = 10_000;
-const DEFAULT_USER_AGENT = "Antigravity/1.5.2";
+const DEFAULT_USER_AGENT = "Antigravity/2.6.0";
 
 export class AntigravityUsageService implements ProviderUsageService {
   public readonly providerId = "antigravity";

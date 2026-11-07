@@ -53,21 +53,12 @@ export function providerCredential(
   return { type: "api_key", value: cursorApiKey };
 }
 
-export function assertAntigravityTextOnly(
+export function assertAntigravityToolsUnsupported(
   target: ProviderExecutionTarget,
-  imageCount: number,
   toolCount: number,
 ): void {
   if (target.providerId !== "antigravity") {
     return;
-  }
-  if (imageCount > 0) {
-    throw new HttpError(
-      "Image input is not supported for Antigravity models yet.",
-      400,
-      "unsupported_parameter",
-      "messages",
-    );
   }
   if (toolCount > 0) {
     throw new HttpError(

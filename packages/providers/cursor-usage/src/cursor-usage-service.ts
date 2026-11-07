@@ -41,7 +41,10 @@ export class CursorUsageService {
   private readonly browserPool: BrowserPoolType;
   private readonly locks = new AccountLockMap();
   private readonly authOperations = new Map<string, CursorUsageAuthOperation>();
-  private readonly liveContexts = new Map<string, import("playwright-core").BrowserContext>();
+  private readonly liveContexts = new Map<
+    string,
+    import("playwright-core").BrowserContext
+  >();
   private readonly authOperationTtlMs: number;
   private readonly collectTimeoutMs: number;
   private readonly loginUrl: string;
@@ -121,9 +124,7 @@ export class CursorUsageService {
             accountId,
           };
         }
-      } else if (
-        !isCollectableSessionRecord(session, profilePresent)
-      ) {
+      } else if (!isCollectableSessionRecord(session, profilePresent)) {
         await this.sessionStore.delete(accountId);
         return {
           status: "authentication_required",
@@ -133,8 +134,7 @@ export class CursorUsageService {
       }
 
       try {
-        const restoredState =
-          session?.storageState ?? { cookies: [], origins: [] };
+        const restoredState = session?.storageState ?? { cookies: [], origins: [] };
         const context = await this.browserPool.restoreAuthenticatedSession(
           accountId,
           restoredState,
@@ -326,7 +326,9 @@ export class CursorUsageService {
                     level: "warn",
                     msg: "session_persist_failed",
                     accountId: operation.accountId,
-                    reason: written ? "resolve_empty_after_write" : "set_persisted_rejected",
+                    reason: written
+                      ? "resolve_empty_after_write"
+                      : "set_persisted_rejected",
                   }),
                 );
               }
@@ -361,9 +363,7 @@ export class CursorUsageService {
     };
   }
 
-  public async getCollectSessionStatus(
-    accountId: string,
-  ): Promise<{
+  public async getCollectSessionStatus(accountId: string): Promise<{
     readonly status: "authenticated" | "authentication_required";
     readonly accountId: string;
     readonly touchedAt?: string;
@@ -499,15 +499,15 @@ export class CursorUsageService {
 }
 
 function normalizeUsagePayloadFromNetwork(raw: unknown): Record<string, unknown> {
-  const body =
-    raw !== null && typeof raw === "object"
-      ? (raw as Record<string, unknown>)
-      : { raw };
+  if (raw === null || typeof raw !== "object") {
+    return { raw };
+  }
+  const body = raw as Record<string, unknown>;
   if (
     body.weeklyIncludedUsage !== undefined ||
     body.weekly_included_usage !== undefined
   ) {
     return normalizeCursorUsagePayload(body);
   }
-  return { ...(body as Record<string, unknown>) };
+  return { ...body };
 }

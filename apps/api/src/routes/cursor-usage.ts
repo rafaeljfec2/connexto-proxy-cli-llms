@@ -11,7 +11,10 @@ export const CURSOR_USAGE_AUTH_BASE = "/v1/providers/cursor/auth";
 type CollectBody = { accountId?: unknown; hubAccountId?: unknown };
 type AuthStartBody = { accountId?: unknown; hubAccountId?: unknown };
 
-function readAccountId(req: Request, body: CollectBody | AuthStartBody): string | undefined {
+function readAccountId(
+  req: Request,
+  body: CollectBody | AuthStartBody,
+): string | undefined {
   const fromBody =
     typeof body.accountId === "string" ? body.accountId.trim() : undefined;
   const fromHeader = req.get("x-hub-account-id")?.trim();
@@ -36,7 +39,8 @@ function rejectInvalidAccount(res: Response): void {
   res.status(400).json({
     error: {
       code: "invalid_account",
-      message: "accountId is required and must match X-Hub-Account-Id when both are sent",
+      message:
+        "accountId is required and must match X-Hub-Account-Id when both are sent",
     },
   });
 }
@@ -49,8 +53,9 @@ export function registerCursorUsageRoutes(app: Express): void {
     async (req: Request, res: Response, next: NextFunction): Promise<void> => {
       try {
         const accountId =
-          (typeof req.query.accountId === "string" ? req.query.accountId.trim() : undefined) ??
-          req.get("x-hub-account-id")?.trim();
+          (typeof req.query.accountId === "string"
+            ? req.query.accountId.trim()
+            : undefined) ?? req.get("x-hub-account-id")?.trim();
         if (accountId === undefined || accountId.length === 0) {
           rejectInvalidAccount(res);
           return;
@@ -84,11 +89,11 @@ export function registerCursorUsageRoutes(app: Express): void {
                 ? 409
                 : result.status === "challenge_required"
                   ? 403
-              : result.status === "browser_unavailable"
-                ? 503
-                : result.status === "timeout"
-                  ? 504
-                  : 502;
+                  : result.status === "browser_unavailable"
+                    ? 503
+                    : result.status === "timeout"
+                      ? 504
+                      : 502;
         res.status(statusCode).json(result);
       } catch (error) {
         next(error);
@@ -128,7 +133,9 @@ export function registerCursorUsageRoutes(app: Express): void {
         const sessionId =
           typeof req.params.sessionId === "string" ? req.params.sessionId : "";
         if (sessionId.length === 0) {
-          res.status(400).json({ error: { code: "invalid_session", message: "sessionId required" } });
+          res.status(400).json({
+            error: { code: "invalid_session", message: "sessionId required" },
+          });
           return;
         }
         const result = await getService().getAuthStatus(sessionId);
@@ -146,7 +153,9 @@ export function registerCursorUsageRoutes(app: Express): void {
         const sessionId =
           typeof req.params.sessionId === "string" ? req.params.sessionId : "";
         if (sessionId.length === 0) {
-          res.status(400).json({ error: { code: "invalid_session", message: "sessionId required" } });
+          res.status(400).json({
+            error: { code: "invalid_session", message: "sessionId required" },
+          });
           return;
         }
         await getService().cancelAuth(sessionId);
@@ -159,7 +168,7 @@ export function registerCursorUsageRoutes(app: Express): void {
 
   app.get(
     `${CURSOR_USAGE_AUTH_BASE}/:sessionId/interaction`,
-    async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    (req: Request, res: Response, next: NextFunction): void => {
       try {
         const sessionId =
           typeof req.params.sessionId === "string" ? req.params.sessionId : "";

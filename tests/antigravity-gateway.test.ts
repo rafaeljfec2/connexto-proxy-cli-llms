@@ -23,6 +23,17 @@ const antigravityModel = "antigravity:gemini-3.8-flash";
 const executedInputs: AgentExecutionInput[] = [];
 let originalCursorApiKey: string | undefined;
 
+/** Real 1x1 transparent PNG (89 50 4E 47 magic bytes). */
+const PNG_1X1_BASE64 =
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
+
+/** Minimal sniffable JPEG payload (FF D8 FF magic bytes). */
+const JPEG_BYTES_BASE64 = Buffer.from(
+  new Uint8Array([0xff, 0xd8, 0xff, 0xd9]),
+).toString("base64");
+
+const GIF_BASE64 = Buffer.from("GIF89a01020304", "ascii").toString("base64");
+
 function registerAntigravityStub(): void {
   const services = getGatewayServices();
   const registry = (services.executor as unknown as ProviderRegistryAccess).router
@@ -198,9 +209,9 @@ describe("Antigravity gateway routing", () => {
     });
   });
 
-  it("rejects Antigravity image and tool requests without changing Cursor behavior", async () => {
+  it("routes a single data-URL image through the executor as a normalized image", async () => {
     const app = buildApp({ HOST: "127.0.0.1" });
-    const image = await request(app)
+    const response = await request(app)
       .post("/v1/chat/completions")
       .send({
         model: antigravityModel,
@@ -211,12 +222,26 @@ describe("Antigravity gateway routing", () => {
               { type: "text", text: "Describe this" },
               {
                 type: "image_url",
-                image_url: { url: "data:image/png;base64,AA==" },
+                image_url: {
+                  url: `data:image/png;base64,${PNG_1X1_BASE64}`,
+                },
               },
             ],
           },
         ],
       });
+
+    expect(response.status).toBe(200);
+    expect(executedInputs).toHaveLength(1);
+    expect(executedInputs[0]).toMatchObject({
+      model: antigravityModel,
+      message: expect.stringContaining("Describe this"),
+      images: [{ mimeType: "image/png", data: PNG_1X1_BASE64 }],
+    });
+  });
+
+  it("keeps tools explicitly rejected for Antigravity", async () => {
+    const app = buildApp({ HOST: "127.0.0.1" });
     const tools = await request(app)
       .post("/v1/chat/completions")
       .send({
@@ -229,8 +254,219 @@ describe("Antigravity gateway routing", () => {
         ],
       });
 
-    expect(image.status).toBe(400);
     expect(tools.status).toBe(400);
     expect(executedInputs).toHaveLength(0);
+  });
+
+  it("rejects invalid Antigravity image payloads without executing a provider", async () => {
+    const app = buildApp({ HOST: "127.0.0.1" });
+    const invalidBase64 = await request(app)
+      .post("/v1/chat/completions")
+      .send({
+        model: antigravityModel,
+        messages: [
+          {
+            role: "user",
+            content: [
+              {
+                type: "image_url",
+                image_url: { url: "data:image/png;base64,QUJD***" },
+              },
+            ],
+          },
+        ],
+      });
+    const wrongMime = await request(app)
+      .post("/v1/chat/completions")
+      .send({
+        model: antigravityModel,
+        messages: [
+          {
+            role: "user",
+            content: [
+              {
+                type: "image_url",
+                image_url: {
+                  url: `data:image/gif;base64,${GIF_BASE64}`,
+                },
+              },
+            ],
+          },
+        ],
+      });
+    const protectedAddress = await request(app)
+      .post("/v1/chat/completions")
+      .send({
+        model: antigravityModel,
+        messages: [
+          {
+            role: "user",
+            content: [
+              {
+                type: "image_url",
+                image_url: { url: "http://169.254.169.254/latest/meta-data/" },
+              },
+            ],
+          },
+        ],
+      });
+
+    expect(invalidBase64.status).toBe(400);
+    expect(wrongMime.status).toBe(400);
+    expect(protectedAddress.status).toBe(400);
+    expect(executedInputs).toHaveLength(0);
+  });
+
+  it("rejects Antigravity requests with too many images", async () => {
+    const app = buildApp({ HOST: "127.0.0.1" });
+    const content: Array<Record<string, unknown>> = [
+      { type: "text", text: "Many images" },
+    ];
+    for (let index = 0; index < 10; index += 1) {
+      content.push({
+        type: "image_url",
+        image_url: { url: `data:image/png;base64,${PNG_1X1_BASE64}` },
+      });
+    }
+
+    const response = await request(app)
+      .post("/v1/chat/completions")
+      .send({ model: antigravityModel, messages: [{ role: "user", content }] });
+
+    expect(response.status).toBe(400);
+    expect(executedInputs).toHaveLength(0);
+  });
+
+  it("routes text+image and multiple-image prompts with normalized order", async () => {
+    const app = buildApp({ HOST: "127.0.0.1" });
+    const response = await request(app)
+      .post("/v1/chat/completions")
+      .send({
+        model: antigravityModel,
+        messages: [
+          {
+            role: "user",
+            content: [
+              { type: "text", text: "Compare these" },
+              {
+                type: "image_url",
+                image_url: { url: `data:image/png;base64,${PNG_1X1_BASE64}` },
+              },
+              {
+                type: "image_url",
+                image_url: {
+                  url: `data:image/jpeg;base64,${JPEG_BYTES_BASE64}`,
+                },
+              },
+            ],
+          },
+        ],
+      });
+
+    expect(response.status).toBe(200);
+    expect(executedInputs).toHaveLength(1);
+    expect(executedInputs[0]?.images).toEqual([
+      { mimeType: "image/png", data: PNG_1X1_BASE64 },
+      { mimeType: "image/jpeg", data: JPEG_BYTES_BASE64 },
+    ]);
+  });
+
+  it("streams an Antigravity image request through the existing SSE contract", async () => {
+    const app = buildApp({ HOST: "127.0.0.1" });
+    const response = await request(app)
+      .post("/v1/chat/completions")
+      .send({
+        model: antigravityModel,
+        stream: true,
+        messages: [
+          {
+            role: "user",
+            content: [
+              { type: "text", text: "Describe this in a stream" },
+              {
+                type: "image_url",
+                image_url: { url: `data:image/png;base64,${PNG_1X1_BASE64}` },
+              },
+            ],
+          },
+        ],
+      });
+
+    expect(response.status).toBe(200);
+    expect(response.text).toContain("data:");
+    expect(executedInputs).toHaveLength(1);
+    expect(executedInputs[0]?.images).toEqual([
+      { mimeType: "image/png", data: PNG_1X1_BASE64 },
+    ]);
+  });
+
+  it("accepts Responses API input_image data URLs for Antigravity", async () => {
+    const app = buildApp({ HOST: "127.0.0.1" });
+    const response = await request(app)
+      .post("/v1/responses")
+      .send({
+        model: antigravityModel,
+        input: [
+          {
+            role: "user",
+            content: [
+              { type: "input_text", text: "What is this?" },
+              {
+                type: "input_image",
+                image_url: `data:image/png;base64,${PNG_1X1_BASE64}`,
+              },
+            ],
+          },
+        ],
+      });
+
+    expect(response.status).toBe(200);
+    expect(executedInputs).toHaveLength(1);
+    expect(executedInputs[0]?.images).toEqual([
+      { mimeType: "image/png", data: PNG_1X1_BASE64 },
+    ]);
+  });
+
+  it("keeps Cursor image requests unchanged", async () => {
+    const app = buildApp({ HOST: "127.0.0.1" });
+    const services = getGatewayServices();
+    const registry = (services.executor as unknown as ProviderRegistryAccess).router
+      .registry;
+    registry.providers.set(
+      "cursor",
+      createStubProvider("cursor", {
+        execute: (input) => {
+          executedInputs.push(input);
+          return Promise.resolve(
+            createCompletedRun("cursor", input.sessionId, "Cursor fixture response"),
+          );
+        },
+      }),
+    );
+    const response = await request(app)
+      .post("/v1/chat/completions")
+      .set("Authorization", "Bearer cursor-test-key")
+      .send({
+        model: "composer-2.5",
+        messages: [
+          {
+            role: "user",
+            content: [
+              { type: "text", text: "Describe this" },
+              {
+                type: "image_url",
+                image_url: { url: `data:image/png;base64,${PNG_1X1_BASE64}` },
+              },
+            ],
+          },
+        ],
+      });
+
+    expect(response.status).toBe(200);
+    expect(executedInputs.at(-1)).toMatchObject({
+      model: "composer-2.5",
+      credential: { type: "api_key", value: "cursor-test-key" },
+    });
+    expect(executedInputs.at(-1)?.images).toBeUndefined();
   });
 });
