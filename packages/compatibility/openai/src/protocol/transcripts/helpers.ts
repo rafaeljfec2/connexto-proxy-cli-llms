@@ -3,7 +3,6 @@ import type { ToolCallContext } from "../types.js";
 import { HttpError } from "../../http.js";
 import { isRecord, integerOrNull } from "../common.js";
 import { sanitizeContextPath } from "../tools/normalizers.js";
-import { contentToPlainText } from "../tools/workspace.js";
 
 export function validateCommonUnsupported(record: Record<string, unknown>): void {
   if (typeof record.n === "number" && record.n !== 1) {
@@ -175,12 +174,49 @@ export function contentToTextAndImages(
   return { text: parts.join("\n"), images };
 }
 
+export function instructionsToPlainText(instructions: unknown): string {
+  if (typeof instructions === "string") return instructions;
+  if (!Array.isArray(instructions)) return "";
+  const parts: string[] = [];
+  for (const part of instructions) {
+    if (typeof part === "string") {
+      parts.push(part);
+      continue;
+    }
+    if (!isRecord(part)) continue;
+    if (typeof part.text === "string") parts.push(part.text);
+    else if (part.content !== undefined) {
+      parts.push(contentToTextAndImages(part.content, "system").text);
+    } else {
+      parts.push(JSON.stringify(part));
+    }
+  }
+  return parts.join("\n");
+}
+
+export function responseInputItemToPlainText(item: unknown): string {
+  if (typeof item === "string") return item;
+  if (!isRecord(item)) return "";
+  const parts: string[] = [];
+  if (typeof item.instructions === "string") parts.push(item.instructions);
+  const role = typeof item.role === "string" ? item.role : "user";
+  if (item.content !== undefined) {
+    parts.push(contentToTextAndImages(item.content, role).text);
+  } else if (typeof item.text === "string") {
+    parts.push(item.text);
+  }
+  return parts.join("\n");
+}
+
 export function toolCallContextFromMessages(
   messages: unknown[],
 ): ToolCallContext | undefined {
   const workingDirectory = messages
-    .map((message) => (isRecord(message) ? contentToPlainText(message.content) : ""))
-    .map(workingDirectoryFromText)
+    .map((message) => {
+      if (!isRecord(message)) return undefined;
+      const role = typeof message.role === "string" ? message.role : "user";
+      return workingDirectoryFromText(contentToTextAndImages(message.content, role).text);
+    })
     .find(Boolean);
   return workingDirectory ? { workingDirectory } : undefined;
 }
@@ -190,14 +226,11 @@ export function toolCallContextFromResponseInput(
   instructions: unknown,
 ): ToolCallContext | undefined {
   const texts: string[] = [];
-  if (typeof instructions === "string") texts.push(instructions);
+  const instructionText = instructionsToPlainText(instructions);
+  if (instructionText) texts.push(instructionText);
   for (const item of responseInputArray(input)) {
-    if (typeof item === "string") {
-      texts.push(item);
-    } else if (isRecord(item)) {
-      texts.push(contentToPlainText(item.content));
-      if (typeof item.instructions === "string") texts.push(item.instructions);
-    }
+    const chunk = responseInputItemToPlainText(item);
+    if (chunk) texts.push(chunk);
   }
   const workingDirectory = texts.map(workingDirectoryFromText).find(Boolean);
   return workingDirectory ? { workingDirectory } : undefined;
@@ -206,6 +239,7 @@ export function toolCallContextFromResponseInput(
 export function workingDirectoryFromText(text: string): string | undefined {
   for (const pattern of [
     /^\s*Working directory:\s*(.+)$/im,
+    /^\s*[-*]\s*Working directory:\s*(.+)$/im,
     /^\s*Current working directory:\s*(.+)$/im,
     /^\s*Workspace root folder:\s*(.+)$/im,
     /^\s*Workspace root:\s*(.+)$/im,
@@ -213,6 +247,9 @@ export function workingDirectoryFromText(text: string): string | undefined {
     /^\s*Project root:\s*(.+)$/im,
     /^\s*Open folder:\s*(.+)$/im,
     /^\s*Repository root:\s*(.+)$/im,
+    /"workingDirectory"\s*:\s*"([^"]+)"/,
+    /"working_directory"\s*:\s*"([^"]+)"/,
+    /"cwd"\s*:\s*"([^"]+)"/,
   ]) {
     const match = pattern.exec(text);
     const value = sanitizeContextPath(match?.[1]);
