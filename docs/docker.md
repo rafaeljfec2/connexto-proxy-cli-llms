@@ -16,6 +16,8 @@ Compose loads `.env` via `env_file`, then applies overrides below. **`environmen
 | `HOST=0.0.0.0`                                                     | Listen inside the container network namespace                                 |
 | `LOG_FORMAT=json`                                                  | Production image has no `pino-pretty`                                         |
 | `GATEWAY_API_TOKEN=${GATEWAY_API_TOKEN:-docker-local-gateway-dev}` | Non-loopback bind requires a token; empty `.env` values use the local default |
+| `CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium`                       | Host `.env` often sets WSL `google-chrome`, which does not exist in the image |
+| `CURSOR_USAGE_AUTH_HEADLESS=true`                                  | Container has no display; headed OAuth from `.env` (`false`) will fail        |
 
 Set a strong, unique `GATEWAY_API_TOKEN` in `.env` before exposing the container beyond your machine. Use that value as `X-Gateway-API-Key` in Swagger.
 
@@ -69,6 +71,12 @@ Restarting or recreating the Proxy Docker container preserves provider sessions 
 - **Named Volume `proxy-sessions`**: Mounted at `/var/lib/connexto-proxy/sessions:rw`. Stores session mappings for Cursor (`cursor/<sessionId>.json`) and Antigravity ACP (`antigravity/<gatewaySessionId>.json`). Directory permissions in the image (`1777`) ensure write access across any host UID (`CURSOR_CONTAINER_USER`).
 - **Antigravity Host Credentials & Environment**: The compose file mounts `${HOST_GEMINI_DIR:-${HOME}/.gemini}` to `/app/.gemini` and `${HOST_ANTIGRAVITY_CONFIG_DIR:-${HOME}/.config/antigravity}` to `/app/.config/antigravity`, preserving Google OAuth tokens (`oauth_creds.json`, `jetski-standalone-oauth-token`, `google_accounts.json`) and CLI user scopes. The container sets `HOME=/app`, `AGY_PATH=/app/.gemini/bin/agy`, and adds `/app/.gemini/bin` to `PATH`.
 - **Container Re-creation**: Running `docker compose down && docker compose up -d` retains the `proxy-sessions` volume, eliminating the need to re-login to providers.
+
+### Cursor usage auth (Hub «Login web»)
+
+Hub-initiated Cursor login calls `POST /v1/providers/cursor/auth`, which launches Chromium via Playwright. In Docker you must use the **bundled** Chromium (`/usr/bin/chromium`) and **headless** mode; keep `GATEWAY_API_TOKEN` in `.env` aligned with the Hub **Gateway API Key**.
+
+For a **visible** browser window (social login, CAPTCHA), run `pnpm dev` on the host instead of Docker (`CURSOR_USAGE_AUTH_HEADLESS=false` + host Chrome path).
 
 ### Clearing persisted sessions (API)
 

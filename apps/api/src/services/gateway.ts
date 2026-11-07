@@ -167,6 +167,8 @@ export function createGatewayServices(
       authViewportHeight: env?.CURSOR_USAGE_AUTH_VIEWPORT_HEIGHT,
       loginUrl: env?.CURSOR_USAGE_LOGIN_URL,
       dashboardUrl: env?.CURSOR_USAGE_DASHBOARD_URL,
+      usageStatusUrl: env?.CURSOR_USAGE_STATUS_URL,
+      usageAnalyticsUrl: env?.CURSOR_USAGE_ANALYTICS_URL,
       authenticatedUrlPattern,
       usageResponseUrlPattern,
       interactionUrlBase:

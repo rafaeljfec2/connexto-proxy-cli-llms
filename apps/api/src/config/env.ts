@@ -107,6 +107,8 @@ const envSchema = z
     CURSOR_USAGE_AUTH_VIEWPORT_HEIGHT: z.coerce.number().int().positive().default(768),
     CURSOR_USAGE_LOGIN_URL: z.string().trim().optional(),
     CURSOR_USAGE_DASHBOARD_URL: z.string().trim().optional(),
+    CURSOR_USAGE_STATUS_URL: z.string().trim().optional(),
+    CURSOR_USAGE_ANALYTICS_URL: z.string().trim().optional(),
     CURSOR_USAGE_AUTHENTICATED_URL_PATTERN: z.string().trim().optional(),
     CURSOR_USAGE_RESPONSE_URL_PATTERN: z.string().trim().optional(),
     CURSOR_USAGE_INTERACTION_URL_BASE: z

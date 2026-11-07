@@ -43,8 +43,12 @@ RUN apt-get update \
   && groupadd --system --gid 1001 gateway \
   && useradd --system --uid 1001 --gid gateway --home-dir /app gateway \
   && mkdir -p /var/lib/connexto-proxy/sessions \
-  && chmod -R 1777 /var/lib/connexto-proxy \
-  && chown -R gateway:gateway /var/lib/connexto-proxy
+    /var/lib/connexto-proxy/cursor-usage-auth \
+    /var/lib/connexto-proxy/gateway-home \
+  && chown -R gateway:gateway /var/lib/connexto-proxy \
+  && chmod 1777 /var/lib/connexto-proxy/sessions \
+    /var/lib/connexto-proxy/cursor-usage-auth \
+    /var/lib/connexto-proxy/gateway-home
 
 WORKDIR /app
 

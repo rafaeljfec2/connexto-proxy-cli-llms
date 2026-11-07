@@ -15,13 +15,19 @@ import type {
   CursorUsageCollectResult,
   CursorUsageServiceOptions,
 } from "./types.js";
+import {
+  DEFAULT_COLLECT_DASHBOARD_URL,
+  DEFAULT_USAGE_ANALYTICS_SUFFIX,
+  DEFAULT_USAGE_STATUS_SUFFIX,
+  normalizeCursorUsagePayload,
+  resolveCollectApiUrl,
+} from "./usage-normalize.js";
 
 const DEFAULT_LOGIN = "https://authenticator.cursor.sh/";
-const DEFAULT_DASHBOARD = "https://cursor.com/dashboard";
-const DEFAULT_USAGE_PATTERN = /usage/i;
+const DEFAULT_USAGE_PATTERN = /usage-status|get-user-analytics/i;
 /** Post-OAuth landings include /agents (social) and /dashboard (usage UI). */
 const DEFAULT_AUTHENTICATED_URL_PATTERN =
-  /(^https?:\/\/)?([^/]+\.)?cursor\.com\/(dashboard|settings|agents)(\/?|$|\?)/i;
+  /(^https?:\/\/)?(?:([^/]+\.)?cursor\.com\/(dashboard|settings|agents)|grok\.com\/dashboard)(\/?|$|\?)/i;
 
 export class CursorUsageService {
   private readonly sessionStore: CursorUsageSessionStore;
@@ -32,10 +38,13 @@ export class CursorUsageService {
   private readonly authOperationTtlMs: number;
   private readonly collectTimeoutMs: number;
   private readonly loginUrl: string;
-  private readonly dashboardUrl: string;
+  private readonly collectDashboardUrl: string;
+  private readonly usageStatusUrl?: string;
+  private readonly usageAnalyticsUrl?: string;
   private readonly usageUrlPattern: RegExp;
   private readonly authenticatedUrlPattern: RegExp;
   private readonly interactionUrlBase: string;
+  private readonly authHeadless: boolean;
   private readonly now: () => number;
 
   constructor(options: CursorUsageServiceOptions = {}) {
@@ -58,11 +67,14 @@ export class CursorUsageService {
     this.authOperationTtlMs = options.authOperationTtlMs ?? 30 * 60_000;
     this.collectTimeoutMs = options.collectTimeoutMs ?? 60_000;
     this.loginUrl = options.loginUrl ?? DEFAULT_LOGIN;
-    this.dashboardUrl = options.dashboardUrl ?? DEFAULT_DASHBOARD;
+    this.collectDashboardUrl = options.dashboardUrl ?? DEFAULT_COLLECT_DASHBOARD_URL;
+    this.usageStatusUrl = options.usageStatusUrl;
+    this.usageAnalyticsUrl = options.usageAnalyticsUrl;
     this.usageUrlPattern = options.usageResponseUrlPattern ?? DEFAULT_USAGE_PATTERN;
     this.authenticatedUrlPattern =
       options.authenticatedUrlPattern ?? DEFAULT_AUTHENTICATED_URL_PATTERN;
     this.interactionUrlBase = options.interactionUrlBase ?? "";
+    this.authHeadless = options.authHeadless !== false;
   }
 
   public async collectUsage(accountId: string): Promise<CursorUsageCollectResult> {
@@ -89,12 +101,24 @@ export class CursorUsageService {
           accountId,
           session.storageState,
         );
-        const raw = await this.browserPool.waitForUsageJson({
-          context,
-          dashboardUrl: this.dashboardUrl,
-          urlPattern: this.usageUrlPattern,
-          timeoutMs: this.collectTimeoutMs,
-        });
+        let usage: Record<string, unknown>;
+        let collectionMethod: string;
+        try {
+          usage = await this.collectUsageViaApi(context);
+          collectionMethod = "dashboard_api";
+        } catch (apiError) {
+          if (apiError instanceof SessionExpiredError) {
+            throw apiError;
+          }
+          const raw = await this.browserPool.waitForUsageJson({
+            context,
+            dashboardUrl: this.collectDashboardUrl,
+            urlPattern: this.usageUrlPattern,
+            timeoutMs: this.collectTimeoutMs,
+          });
+          usage = normalizeUsagePayloadFromNetwork(raw);
+          collectionMethod = "browser_network";
+        }
         const storageState = await context.storageState();
         await context.close();
         await this.sessionStore.setPersisted({
@@ -107,10 +131,10 @@ export class CursorUsageService {
           provider: "cursor",
           accountId,
           collectedAt: new Date(this.now()).toISOString(),
-          usage: normalizeUsage(raw),
+          usage,
           metadata: {
             source: "cursor_dashboard",
-            collectionMethod: "browser_network",
+            collectionMethod,
           },
         };
       } catch (error) {
@@ -164,6 +188,7 @@ export class CursorUsageService {
         sessionId,
         expiresAt: new Date(expiresAt).toISOString(),
         interactionUrl,
+        browserMode: this.authHeadless ? "headless" : "headed",
       };
     });
   }
@@ -203,6 +228,31 @@ export class CursorUsageService {
       accountId: operation.accountId,
       status: operation.status,
       expiresAt: new Date(operation.expiresAt).toISOString(),
+    };
+  }
+
+  public async getCollectSessionStatus(
+    accountId: string,
+  ): Promise<{
+    readonly status: "authenticated" | "authentication_required";
+    readonly accountId: string;
+    readonly touchedAt?: string;
+  }> {
+    const session = await this.sessionStore.resolve(accountId);
+    if (
+      session === undefined ||
+      session.status !== "authenticated" ||
+      session.storageState === undefined
+    ) {
+      return {
+        status: "authentication_required",
+        accountId,
+      };
+    }
+    return {
+      status: "authenticated",
+      accountId,
+      touchedAt: new Date(session.touchedAt).toISOString(),
     };
   }
 
@@ -246,11 +296,54 @@ export class CursorUsageService {
     }
   }
 
+  private async collectUsageViaApi(
+    context: import("playwright-core").BrowserContext,
+  ): Promise<Record<string, unknown>> {
+    const statusUrl = resolveCollectApiUrl(
+      this.collectDashboardUrl,
+      this.usageStatusUrl,
+      DEFAULT_USAGE_STATUS_SUFFIX,
+    );
+    const statusResponse = await context.request.get(statusUrl, {
+      timeout: this.collectTimeoutMs,
+    });
+    if (!statusResponse.ok()) {
+      if (statusResponse.status() === 401 || statusResponse.status() === 403) {
+        throw new SessionExpiredError();
+      }
+      throw new CollectionFailedError(
+        `usage-status responded ${statusResponse.status()}`,
+      );
+    }
+    const usageStatus: unknown = await statusResponse.json();
+
+    const analyticsUrl = resolveCollectApiUrl(
+      this.collectDashboardUrl,
+      this.usageAnalyticsUrl,
+      DEFAULT_USAGE_ANALYTICS_SUFFIX,
+    );
+    let analytics: unknown;
+    const analyticsResponse = await context.request.get(analyticsUrl, {
+      timeout: Math.min(this.collectTimeoutMs, 30_000),
+    });
+    if (analyticsResponse.ok()) {
+      analytics = await analyticsResponse.json();
+    }
+
+    return normalizeCursorUsagePayload(usageStatus, analytics);
+  }
 }
 
-function normalizeUsage(raw: unknown): Record<string, unknown> {
-  if (raw !== null && typeof raw === "object") {
-    return { ...(raw as Record<string, unknown>) };
+function normalizeUsagePayloadFromNetwork(raw: unknown): Record<string, unknown> {
+  const body =
+    raw !== null && typeof raw === "object"
+      ? (raw as Record<string, unknown>)
+      : { raw };
+  if (
+    body.weeklyIncludedUsage !== undefined ||
+    body.weekly_included_usage !== undefined
+  ) {
+    return normalizeCursorUsagePayload(body);
   }
-  return { raw: raw as unknown };
+  return { ...(body as Record<string, unknown>) };
 }

@@ -56,6 +56,8 @@ export interface CursorUsageAuthStartResult {
   readonly sessionId: string;
   readonly expiresAt: string;
   readonly interactionUrl: string;
+  /** headed = visible Chromium on the proxy host; headless = no desktop window (typical Docker). */
+  readonly browserMode: "headed" | "headless";
 }
 
 export interface CursorUsageAuthStatusResult {
@@ -65,6 +67,12 @@ export interface CursorUsageAuthStatusResult {
   readonly expiresAt: string;
 }
 
+export interface CursorUsageCollectSessionStatus {
+  readonly status: "authenticated" | "authentication_required";
+  readonly accountId: string;
+  readonly touchedAt?: string;
+}
+
 export interface CursorUsageServiceOptions {
   readonly maxSessions?: number;
   readonly sessionTtlMs?: number;
@@ -72,6 +80,8 @@ export interface CursorUsageServiceOptions {
   readonly collectTimeoutMs?: number;
   readonly loginUrl?: string;
   readonly dashboardUrl?: string;
+  readonly usageStatusUrl?: string;
+  readonly usageAnalyticsUrl?: string;
   readonly usageResponseUrlPattern?: RegExp;
   readonly authenticatedUrlPattern?: RegExp;
   readonly chromiumExecutablePath?: string;

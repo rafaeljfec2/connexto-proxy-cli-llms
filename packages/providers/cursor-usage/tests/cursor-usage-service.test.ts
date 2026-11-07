@@ -39,6 +39,76 @@ describe("CursorUsageService", () => {
     const result = await service.collectUsage("acct-2");
     expect(result.status).toBe("available");
     expect(result.usage).toEqual({ used: 12, limit: 100 });
+    expect(pool.waitForUsageJson).toHaveBeenCalled();
+  });
+
+  it("prefers dashboard API when usage-status responds ok", async () => {
+    const store = createNamespacedStore(
+      new InMemorySessionStore<CursorUsageSessionRecord>(),
+      CURSOR_USAGE_NAMESPACE,
+    );
+    await store.set("acct-api", {
+      accountId: "acct-api",
+      status: "authenticated",
+      touchedAt: Date.now(),
+      storageState: { cookies: [], origins: [] },
+    });
+
+    const pool = createStubPool();
+    const mockContext = {
+      storageState: vi.fn(async () => ({ cookies: [], origins: [] })),
+      close: vi.fn(async () => undefined),
+      request: {
+        get: vi.fn(async (url: string) => {
+          if (String(url).includes("usage-status")) {
+            return {
+              ok: () => true,
+              status: () => 200,
+              json: async () => ({
+                weeklyIncludedUsage: { usedCents: 4168, budgetCents: 4615 },
+              }),
+            };
+          }
+          return { ok: () => false, status: () => 404 };
+        }),
+      },
+    };
+    pool.restoreAuthenticatedSession = vi.fn(async () => mockContext as never);
+
+    const service = new CursorUsageService({ store, browserPool: pool });
+    const result = await service.collectUsage("acct-api");
+
+    expect(result.status).toBe("available");
+    expect(result.usage?.total_usage).toBe(41.68);
+    expect(result.usage?.total_credits).toBe(46.15);
+    expect(pool.waitForUsageJson).not.toHaveBeenCalled();
+  });
+
+  it("marks auth complete when login lands on grok.com/dashboard", async () => {
+    const store = createNamespacedStore(
+      new InMemorySessionStore<CursorUsageSessionRecord>(),
+      CURSOR_USAGE_NAMESPACE,
+    );
+    const pool = createStubPool();
+    pool.openAuthSession = vi.fn(async () => ({}) as never);
+    pool.getLiveAuth = vi.fn(
+      () =>
+        ({
+          page: { url: () => "https://grok.com/dashboard" },
+          context: {},
+        }) as never,
+    );
+    pool.captureStorageState = vi.fn(async () => ({
+      cookies: [],
+      origins: [],
+    }));
+    pool.closeAuthSession = vi.fn(async () => undefined);
+
+    const service = new CursorUsageService({ store, browserPool: pool });
+    const started = await service.startAuth("acct-grok");
+    const status = await service.getAuthStatus(started.sessionId);
+
+    expect(status.status).toBe("authenticated");
   });
 
   it("marks auth complete when social login lands on cursor.com/agents", async () => {
@@ -74,6 +144,12 @@ function createStubPool(options: { usageJson?: unknown } = {}): PlaywrightBrowse
   const mockContext = {
     storageState: vi.fn(async () => ({ cookies: [], origins: [] })),
     close: vi.fn(async () => undefined),
+    request: {
+      get: vi.fn(async () => ({
+        ok: () => false,
+        status: () => 404,
+      })),
+    },
   } as unknown as BrowserContext;
 
   const stub = Object.create(PlaywrightBrowserPool.prototype) as PlaywrightBrowserPool;

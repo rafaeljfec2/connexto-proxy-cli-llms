@@ -16,13 +16,18 @@ services:
       NODE_ENV: production
       LOG_FORMAT: json
       LOG_LEVEL: info
+      # Host .env often points at WSL Chrome + headed auth; invalid inside the container.
+      CHROMIUM_EXECUTABLE_PATH: /usr/bin/chromium
+      CURSOR_USAGE_AUTH_HEADLESS: "true"
+      HOME: /var/lib/connexto-proxy/gateway-home
+      CURSOR_USAGE_AUTH_USER_DATA_DIR: /var/lib/connexto-proxy/cursor-usage-auth
+      CURSOR_USAGE_INTERACTION_URL_BASE: http://127.0.0.1:9090
       # Local Docker default when .env leaves GATEWAY_API_TOKEN empty. Override in .env for real deployments.
       GATEWAY_API_TOKEN: ${GATEWAY_API_TOKEN:-docker-local-gateway-dev}
       GATEWAY_JSON_BODY_LIMIT_BYTES: ${GATEWAY_JSON_BODY_LIMIT_BYTES:-33554432}
       CURSOR_DEFAULT_WORKING_DIRECTORY: /workspace
       SESSION_STORAGE_DRIVER: ${SESSION_STORAGE_DRIVER:-filesystem}
       SESSION_STORAGE_PATH: ${SESSION_STORAGE_PATH:-/var/lib/connexto-proxy/sessions}
-      HOME: /app
       AGY_PATH: /app/.gemini/bin/agy
       PATH: /app/.gemini/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
     volumes:

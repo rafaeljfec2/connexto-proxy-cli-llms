@@ -41,6 +41,25 @@ function rejectInvalidAccount(res: Response): void {
 export function registerCursorUsageRoutes(app: Express): void {
   const getService = () => getGatewayServices().cursorUsageService;
 
+  app.get(
+    "/v1/providers/cursor/usage/session",
+    async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+      try {
+        const accountId =
+          (typeof req.query.accountId === "string" ? req.query.accountId.trim() : undefined) ??
+          req.get("x-hub-account-id")?.trim();
+        if (accountId === undefined || accountId.length === 0) {
+          rejectInvalidAccount(res);
+          return;
+        }
+        const result = await getService().getCollectSessionStatus(accountId);
+        res.status(200).json(result);
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
   app.post(
     CURSOR_USAGE_COLLECT_ROUTE,
     async (req: Request, res: Response, next: NextFunction): Promise<void> => {
@@ -168,8 +187,9 @@ function interactionPlaceholderHtml(sessionId: string, loginPageUrl: string): st
 <head><meta charset="utf-8"><title>Cursor authentication</title></head>
 <body>
   <h1>Cursor login (session ${escapeHtml(sessionId)})</h1>
-  <p><strong>Sign in in the Chromium window opened by the Connexto Proxy</strong> (not in this tab).
-  Set <code>CURSOR_USAGE_AUTH_HEADLESS=false</code> and restart the proxy if no window appears.</p>
+  <p><strong>Headed proxy:</strong> sign in in the Chromium window the proxy opened (not this tab).</p>
+  <p><strong>Docker / headless:</strong> no desktop window is shown — run <code>pnpm dev</code> on the host with
+  <code>CURSOR_USAGE_AUTH_HEADLESS=false</code> (stop Compose on port 9090) for Google/GitHub login.</p>
   <p>Current step in the assisted browser: <a href="${safeUrl}" rel="noopener noreferrer">${safeUrl}</a></p>
   <p>The AI Hub polls auth status automatically. When login completes, this session becomes <code>authenticated</code>.</p>
 </body>
