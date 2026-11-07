@@ -1,8 +1,4 @@
-import type {
-  AgentEvent,
-  AgentResult,
-  AgentRun,
-} from "@agent-runtime-gateway/core";
+import type { AgentEvent, AgentResult, AgentRun } from "@agent-runtime-gateway/core";
 import type { CursorToolCall } from "@agent-runtime-gateway/compatibility-openai";
 import type { CursorTextEvent } from "./engine/types.js";
 import {
@@ -25,6 +21,7 @@ export function agentRunFromCursorTextStream(input: {
   runId: string;
   stream: AsyncIterable<CursorTextEvent>;
   signal?: AbortSignal;
+  cancel?: () => Promise<void>;
 }): AgentRun {
   let finalText = "";
   let settledResult: AgentResult | undefined;
@@ -117,17 +114,17 @@ export function agentRunFromCursorTextStream(input: {
     });
   };
 
-  const cancel = (): Promise<void> => {
+  const cancel = async (): Promise<void> => {
     if (settledResult !== undefined) return Promise.resolve();
     settle({ status: "cancelled" });
-    return Promise.resolve();
+    await input.cancel?.();
   };
 
   if (input.signal !== undefined) {
     abortListener = () => {
-      void cancel();
+      void cancel().catch(() => undefined);
     };
-    if (input.signal.aborted) void cancel();
+    if (input.signal.aborted) void cancel().catch(() => undefined);
     else input.signal.addEventListener("abort", abortListener, { once: true });
   }
 

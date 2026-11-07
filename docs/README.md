@@ -10,15 +10,14 @@ English technical documentation for **agent-runtime-gateway**.
 
 ## Engineering
 
-| Doc                                | Purpose                                      |
-| ---------------------------------- | -------------------------------------------- |
-| [development.md](development.md)   | Workspace, scripts, quality gates, roadmap   |
-| [architecture.md](architecture.md) | Packages and request flow                    |
-| [providers.md](providers.md)       | Cursor and Antigravity providers/credentials |
-| [testing.md](testing.md)           | Test layers and live integration             |
-| [logging.md](logging.md)           | Pino, `X-Request-ID`, redaction rules        |
-| [runbooks/edge-owned-execution-plan.md](runbooks/edge-owned-execution-plan.md) | **Agent runbook:** thin proxy vs local SDK (`edge_owned` / `local_runtime`) |
-
+| Doc                                                                            | Purpose                                                              |
+| ------------------------------------------------------------------------------ | -------------------------------------------------------------------- |
+| [development.md](development.md)                                               | Workspace, scripts, quality gates, roadmap                           |
+| [architecture.md](architecture.md)                                             | Packages and request flow                                            |
+| [providers.md](providers.md)                                                   | Cursor and Antigravity providers/credentials                         |
+| [testing.md](testing.md)                                                       | Test layers and live integration                                     |
+| [logging.md](logging.md)                                                       | Pino, `X-Request-ID`, redaction rules                                |
+| [runbooks/edge-owned-execution-plan.md](runbooks/edge-owned-execution-plan.md) | Archived proposal, superseded by current provider/configuration docs |
 
 ## Security & delivery
 
@@ -28,10 +27,10 @@ English technical documentation for **agent-runtime-gateway**.
 | [reports/phase-0-bootstrap.md](reports/phase-0-bootstrap.md)                 | Phase 0 evidence                             |
 | [reports/phase-1-core.md](reports/phase-1-core.md)                           | Core runtime                                 |
 | [reports/phase-2-cursor.md](reports/phase-2-cursor.md)                       | Cursor provider                              |
-| [reports/phase-3-composer-api-port.md](reports/phase-3-composer-api-port.md) | Composer API port                            |
+| [reports/phase-3-composer-api-port.md](reports/phase-3-composer-api-port.md) | Archived historical implementation report    |
 | [reports/migration-express.md](reports/migration-express.md)                 | Fastify → Express                            |
 
 ## Related repositories
 
-- Reference implementation: [standardagents/composer-api](https://github.com/standardagents/composer-api)
+- Historical reports document earlier compatibility work; they are not setup guides or runtime dependencies.
 - Cursor SDK docs: https://cursor.com/docs/api/sdk/typescript

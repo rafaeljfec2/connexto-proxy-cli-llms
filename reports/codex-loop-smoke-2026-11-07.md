@@ -1,30 +1,20 @@
-# Codex loop — correção operacional e smoke (2026-11-07)
+# Codex tool-loop smoke history (2026-11-07)
 
-## Alterações
+## Historical bridge attempt
 
-- Proxy `.env`: `CURSOR_EXECUTION_MODE=auto` (antes `local`).
-- Bridge/SDK: `CURSOR_SDK_BRIDGE_URL`, `ENCRYPTION_KEY`, timeouts e versões do client (ver `.env`).
-- Bugfix: `defaultCursorEnv()` agora repassa `CURSOR_SDK_BRIDGE_*` para o provider (sem isso, hub com bridge ainda caía em `cursor_missing_backend_url`).
-- `throwNormalized` preserva `ConfigurationError`; startup alerta `cursor_execution_mode_local_with_hub` se `local` + `GATEWAY_API_TOKEN`.
+The original smoke attempt used `CURSOR_EXECUTION_MODE=auto` and an external SDK bridge. This section preserves the failed results as historical evidence; the bridge setup is no longer an operator step.
 
-## Smoke HTTP (hub integrado)
+| Request ID                             | HTTP result | Historical outcome                                                                          |
+| -------------------------------------- | ----------- | ------------------------------------------------------------------------------------------- |
+| `cef1da0a-b8ac-4fc4-baaf-b3377c3b2fd0` | 500         | `cursor_missing_backend_url`; the bridge URL was not forwarded to the provider environment. |
+| `1783777e-05d8-4f4b-9b7b-62ce8fde70ef` | 502         | `upstream_error`; the external bridge was unavailable on port 8792.                         |
 
-Pedido: `POST /v1/responses` com `X-Gateway-API-Key`, tools `write`, cwd `ativeplus`, criar `teste.txt`.
+Those attempts demonstrated that the bridge was an additional runtime dependency and did not establish a successful Codex tool cycle.
 
-| requestId | HTTP | error.code (antes → depois) |
-|-----------|------|-----------------------------|
-| `cef1da0a-b8ac-4fc4-baaf-b3377c3b2fd0` | 500 | `cursor_missing_backend_url` (bridge URL ignorada no env do provider) |
-| `1783777e-05d8-4f4b-9b7b-62ce8fde70ef` | 502 | `upstream_error` (rota edge + bridge; bridge não estava no ar em 8792) |
+## Current execution path
 
-Conclusão: o proxy passou a usar o caminho **edge_owned + SDK bridge**, não mais `local_runtime` com `requiresLocalTool` no disco do proxy (causa do loop Codex).
+Hub-integrated Cursor requests use an in-process `@cursor/sdk` agent. Client tool calls are returned to Codex through the OpenAI-compatible response stream; the proxy does not execute them against the IDE workspace. No `composer-api` checkout, second process, or port 8792 listener is part of the current runbook.
 
-## Operador (Codex real)
+## Validation status
 
-1. Subir bridge: `cd ~/dev-outros/composer-api && node ./scripts/cursor-sdk-local-agent-bridge.mjs` (ou `docker compose up` com bridge exposto em 8792).
-2. Proxy: `pnpm --filter @agent-runtime-gateway/api dev` na porta 9090.
-3. IDE em `ativeplus`, Codex via AI Hub: pedido único para criar `teste.txt` — esperar **uma** rodada de `function_call` no cliente, sem loop de “verificando…”.
-
-## Testes automatizados
-
-- `pnpm test` (exceto 3 testes live de integração Cursor — 401/ambiente).
-- `packages/providers/cursor/tests/errors.test.ts` e `tests/cursor-edge-env.test.ts` — OK.
+Automated validation for the replacement path passed: `pnpm test`, `pnpm lint`, and `pnpm typecheck` completed with `CURSOR_API_KEY` empty. The HTTP fixture and SDK runner tests are mocked; they are not evidence of a live Codex + AI Hub + `ativeplus` smoke. Do not run authenticated smoke tests until the outstanding credential-rotation question is resolved.

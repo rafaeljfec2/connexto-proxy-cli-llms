@@ -6,7 +6,7 @@ describe("warnCursorEdgeOwnedEnvIfNeeded", () => {
     vi.restoreAllMocks();
   });
 
-  it("warns when edge_owned backend variables are missing", () => {
+  it("does not require private backend variables for in-process edge execution", () => {
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     warnCursorEdgeOwnedEnvIfNeeded({
       CURSOR_EXECUTION_MODE: "auto",
@@ -15,17 +15,7 @@ describe("warnCursorEdgeOwnedEnvIfNeeded", () => {
       CURSOR_CHAT_ENDPOINT: "",
     });
 
-    expect(warnSpy).toHaveBeenCalledOnce();
-    const payload = JSON.parse(String(warnSpy.mock.calls[0]?.[0])) as {
-      msg: string;
-      missing: string[];
-    };
-    expect(payload.msg).toBe("cursor_edge_owned_env_incomplete");
-    expect(payload.missing).toEqual([
-      "CURSOR_BACKEND_BASE_URL",
-      "CURSOR_LOCAL_AGENT_ENDPOINT",
-      "CURSOR_CHAT_ENDPOINT",
-    ]);
+    expect(warnSpy).not.toHaveBeenCalled();
   });
 
   it("warns when CURSOR_EXECUTION_MODE is local with hub gateway configured", () => {
@@ -39,11 +29,10 @@ describe("warnCursorEdgeOwnedEnvIfNeeded", () => {
     expect(payload.msg).toBe("cursor_execution_mode_local_with_hub");
   });
 
-  it("does not warn edge_owned vars when SDK bridge URL is set", () => {
+  it("does not warn in edge mode when private backend variables are absent", () => {
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     warnCursorEdgeOwnedEnvIfNeeded({
-      CURSOR_EXECUTION_MODE: "auto",
-      CURSOR_SDK_BRIDGE_URL: "http://127.0.0.1:8792/sdk",
+      CURSOR_EXECUTION_MODE: "edge",
     });
     expect(warnSpy).not.toHaveBeenCalled();
   });

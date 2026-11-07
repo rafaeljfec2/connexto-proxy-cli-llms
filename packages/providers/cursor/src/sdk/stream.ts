@@ -1,7 +1,6 @@
 import { exchangeCursorApiKey } from "../engine/auth-api.js";
 import type { CursorDeps, CursorEnv, CursorTextEvent } from "../engine/types.js";
 import {
-  isRecord,
   type CursorImage,
   type CursorToolCall,
 } from "@agent-runtime-gateway/compatibility-openai";
@@ -24,17 +23,14 @@ import {
 } from "./prompts.js";
 import {
   closeSdkUpload,
-  cursorLocalSdkBridgeJson,
   cursorLocalSdkEndpoint,
   cursorLocalSdkRaw,
-  hasCursorSdkBridge,
   withSdkStartTimeout,
   writeSdkUpload,
-} from "./bridge.js";
+} from "./transport.js";
 import {
   decodeLocalAgentServerFrame,
   isEmittableSdkToolCall,
-  normalizeSdkToolCallForOpenCode,
 } from "./tool-decoding.js";
 import {
   encodeAgentClientRequestContextResult,
@@ -88,14 +84,6 @@ export async function createCursorSdkCompletion(
     requiresLocalTool: input.requiresLocalTool === true,
     allowToolCall: input.allowToolCall,
   };
-
-  if (hasCursorSdkBridge(env)) {
-    return {
-      agentId,
-      runId,
-      stream: streamCursorLocalSdkBridgeRunWithRetry(env, deps, apiKey, runInput),
-    };
-  }
 
   const accessToken = await exchangeCursorApiKey(env, deps, apiKey);
   return {
@@ -293,74 +281,5 @@ export async function* streamCursorLocalSdkRunWithRetry(
 ): AsyncGenerator<CursorTextEvent> {
   yield* withSdkToolRetry(deps, input, (attemptInput) =>
     streamCursorLocalSdkRun(env, deps, accessToken, attemptInput),
-  );
-}
-
-export async function* streamCursorLocalSdkBridgeRun(
-  env: CursorEnv,
-  deps: CursorDeps,
-  apiKey: string,
-  input: {
-    agentId: string;
-    runId: string;
-    sessionKey: string;
-    prompt: string;
-    modelId: string;
-    workingDirectory?: string;
-    clientTools?: ClientToolSpec[];
-    allowToolCall?: (toolCall: CursorToolCall) => ToolCallDecision;
-  },
-): AsyncGenerator<CursorTextEvent> {
-  const output = await cursorLocalSdkBridgeJson(env, deps, apiKey, input);
-  const text = typeof output.text === "string" ? output.text : "";
-  const toolCalls: CursorToolCall[] = [];
-  const rawToolCalls = Array.isArray(output.toolCalls) ? output.toolCalls : [];
-
-  if (text) yield { type: "text", text };
-
-  for (const rawToolCall of rawToolCalls) {
-    if (!rawToolCall || typeof rawToolCall.name !== "string") continue;
-    const toolCall = normalizeSdkToolCallForOpenCode({
-      name: rawToolCall.name,
-      arguments: isRecord(rawToolCall.arguments) ? rawToolCall.arguments : {},
-    });
-    if (!isEmittableSdkToolCall(toolCall)) continue;
-    const decision = input.allowToolCall?.(toolCall) ?? true;
-    if (decision !== true) {
-      yield {
-        type: "rejected_tool_call",
-        toolCall,
-        reason: typeof decision === "string" ? decision : undefined,
-      };
-      yield { type: "done", finalText: text, toolCalls };
-      return;
-    }
-    toolCalls.push(toolCall);
-    yield { type: "tool_call", toolCall };
-    yield { type: "done", finalText: text, toolCalls };
-    return;
-  }
-
-  yield { type: "done", finalText: text, toolCalls };
-}
-
-export async function* streamCursorLocalSdkBridgeRunWithRetry(
-  env: CursorEnv,
-  deps: CursorDeps,
-  apiKey: string,
-  input: {
-    agentId: string;
-    runId: string;
-    sessionKey: string;
-    prompt: string;
-    modelId: string;
-    workingDirectory?: string;
-    clientTools?: ClientToolSpec[];
-    requiresLocalTool: boolean;
-    allowToolCall?: (toolCall: CursorToolCall) => ToolCallDecision;
-  },
-): AsyncGenerator<CursorTextEvent> {
-  yield* withSdkToolRetry(deps, input, (attemptInput) =>
-    streamCursorLocalSdkBridgeRun(env, deps, apiKey, attemptInput),
   );
 }

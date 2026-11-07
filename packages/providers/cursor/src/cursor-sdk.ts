@@ -14,7 +14,6 @@ import {
 
 export type {
   ClientToolSpec,
-  CursorSdkBridgeOutput,
   CursorSdkCompletion,
   CursorSdkSession,
   ToolCallDecision,

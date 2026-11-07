@@ -154,4 +154,4 @@ Validation and provider errors generally follow OpenAI-style JSON:
 
 ## Examples
 
-See [../README.md](../README.md) for `curl` quick starts. For protocol details and tool/MCP behavior, see `packages/compatibility/openai/src/protocol/` and phase report [reports/phase-3-composer-api-port.md](reports/phase-3-composer-api-port.md).
+See [../README.md](../README.md) for `curl` quick starts. For protocol details and tool/MCP behavior, see `packages/compatibility/openai/src/protocol/`. Historical implementation reports are indexed in [docs/README.md](README.md).

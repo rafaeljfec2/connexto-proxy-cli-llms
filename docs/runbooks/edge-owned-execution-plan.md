@@ -1,8 +1,10 @@
-# Runbook: Edge-owned workspace (thin proxy) for AI Hub + Codex
+# Archived proposal: Edge-owned workspace (thin proxy) for AI Hub + Codex
 
-**Audience:** Any autonomous agent (Cursor, Codex, Connexto CDW) working on Class B providers (`cursor`, `antigravity`) behind AI Hub.
+> **Superseded:** This document records the original proposal, not the current operator runbook. Hub-integrated Cursor requests now use a request-scoped, in-process `@cursor/sdk` agent and return client tool calls without opening the IDE workspace in the proxy. Use [architecture.md](../architecture.md), [providers.md](../providers.md), and [configuration.md](../configuration.md) for current behavior and setup. The historical phase checklist below is retained as decision provenance only.
 
-**Status:** Action plan (post BUG-002). BUG-002 fixed silent wrong defaults; this runbook closes the **architecture gap** between product intent and `local_runtime` implementation.
+**Audience:** Historical context only; do not use this document as an active runbook.
+
+**Status:** Archived and superseded by REFACTOR-001. The bridge/private-engine plan below is not an active implementation requirement.
 
 **Related:**
 
@@ -16,10 +18,10 @@
 
 ## 1. Problem statement
 
-| Symptom | Example |
-|--------|---------|
+| Symptom                                                               | Example                                    |
+| --------------------------------------------------------------------- | ------------------------------------------ |
 | Composer via AI Hub describes **AI Hub** instead of the IDE-open repo | Codex on `ativeplus`, model `composer-2.5` |
-| `gpt-6-luna` (direct API) behaves correctly | Class A: Codex owns sandbox and tools |
+| `gpt-6-luna` (direct API) behaves correctly                           | Class A: Codex owns sandbox and tools      |
 
 **Root cause (architecture):**
 
@@ -41,10 +43,10 @@ Docker bind-mounting one repo (`../connexto-aihub` → `/workspace`) is a **dev 
 
 ## 3. Execution modes (decision table)
 
-| Mode | Who runs file tools | Proxy `local.cwd` | Docker mount |
-|------|---------------------|-------------------|--------------|
-| `edge_owned` | **Codex** (edge) | Not used for tool loop | Not required for user repos |
-| `local_runtime` | **Cursor SDK** in proxy | Required | Required if paths are host-absolute |
+| Mode            | Who runs file tools     | Proxy `local.cwd`      | Docker mount                        |
+| --------------- | ----------------------- | ---------------------- | ----------------------------------- |
+| `edge_owned`    | **Codex** (edge)        | Not used for tool loop | Not required for user repos         |
+| `local_runtime` | **Cursor SDK** in proxy | Required               | Required if paths are host-absolute |
 
 **Default when `X-Gateway-API-Key` is set:** `edge_owned` (after this epic).
 
@@ -89,11 +91,11 @@ Document the rule in `docs/architecture.md` after implementation.
 
 ### Step 0.2 — Map code path
 
-| Check | Location | Record in `research.md` |
-|-------|----------|-------------------------|
-| Where `execute()` creates local agent | `packages/providers/cursor/src/provider.ts` | agent create/resume |
-| Where cwd is set | `apps/api/src/routes/responses/create.ts`, `chat-completions.ts` | `resolveExecutionWorkingDirectory` |
-| Prepare mode agent vs ask | `packages/compatibility/openai/src/protocol/prepare.ts` | `tools.length`, `prompt.mode` |
+| Check                                 | Location                                                         | Record in `research.md`            |
+| ------------------------------------- | ---------------------------------------------------------------- | ---------------------------------- |
+| Where `execute()` creates local agent | `packages/providers/cursor/src/provider.ts`                      | agent create/resume                |
+| Where cwd is set                      | `apps/api/src/routes/responses/create.ts`, `chat-completions.ts` | `resolveExecutionWorkingDirectory` |
+| Prepare mode agent vs ask             | `packages/compatibility/openai/src/protocol/prepare.ts`          | `tools.length`, `prompt.mode`      |
 
 ### Step 0.3 — SDK/API spike
 
@@ -128,10 +130,10 @@ Create `docs/adr/ADR-NNN-edge-owned-vs-local-runtime.md` (English):
 
 ### 6.2 — Configuration contract
 
-| Variable | Purpose |
-|----------|---------|
+| Variable                | Purpose                                |
+| ----------------------- | -------------------------------------- |
 | `CURSOR_EXECUTION_MODE` | `auto` \| `edge` \| `local` (proposed) |
-| `X-Gateway-API-Key` | When present, `auto` prefers `edge` |
+| `X-Gateway-API-Key`     | When present, `auto` prefers `edge`    |
 
 Update [configuration.md](../configuration.md) in Phase 2.
 
@@ -176,12 +178,12 @@ Steps:
 
 ### 7.5 — Tests
 
-| Test | Purpose |
-|------|---------|
-| Fixture tests from Phase 0 | `prepareResponsesRequest` / routing |
-| Hub header + composer → no `createLocalAgent` mock calls | `edge_owned` |
-| Direct proxy without header → `createLocalAgent` still called | `local_runtime` |
-| Regression: `tests/gateway-auth.test.ts`, `session-isolation.test.ts` | Update if contract changes |
+| Test                                                                  | Purpose                             |
+| --------------------------------------------------------------------- | ----------------------------------- |
+| Fixture tests from Phase 0                                            | `prepareResponsesRequest` / routing |
+| Hub header + composer → no `createLocalAgent` mock calls              | `edge_owned`                        |
+| Direct proxy without header → `createLocalAgent` still called         | `local_runtime`                     |
+| Regression: `tests/gateway-auth.test.ts`, `session-isolation.test.ts` | Update if contract changes          |
 
 ### 7.6 — Documentation
 
@@ -229,13 +231,13 @@ CDW: `validate` must pass all required gates in `connexto.project.json`.
 
 ### Manual (operator)
 
-| Step | Action | Pass |
-|------|--------|------|
-| 1 | Open repo **R** (not AI Hub) in IDE | — |
-| 2 | Codex: `composer-2.5`, provider AI Hub, IDE context on | — |
-| 3 | Ask: describe this repository | Text describes **R**, not AI Hub |
-| 4 | Switch folder to **S**, same thread or new | Describes **S** |
-| 5 | Repeat with `gpt-6-luna` | Regress Class A |
+| Step | Action                                                 | Pass                             |
+| ---- | ------------------------------------------------------ | -------------------------------- |
+| 1    | Open repo **R** (not AI Hub) in IDE                    | —                                |
+| 2    | Codex: `composer-2.5`, provider AI Hub, IDE context on | —                                |
+| 3    | Ask: describe this repository                          | Text describes **R**, not AI Hub |
+| 4    | Switch folder to **S**, same thread or new             | Describes **S**                  |
+| 5    | Repeat with `gpt-6-luna`                               | Regress Class A                  |
 
 Record in `delivery.md` / AI Memory: `decisions/<DEMAND-ID>-edge-owned.md`.
 
@@ -275,18 +277,18 @@ Record in `delivery.md` / AI Memory: `decisions/<DEMAND-ID>-edge-owned.md`.
 
 ## 14. References (code)
 
-| Topic | Path |
-|-------|------|
-| BUG-002 cwd policy | `apps/api/src/utils/execution-working-directory.ts` |
-| Cursor sessions | `packages/providers/cursor/src/sessions.ts` |
-| Cursor client cwd | `packages/providers/cursor/src/client.ts` |
-| Hub forward | `connexto-aihub/internal/providers/connexto_proxy.go` |
-| Test helper IDE context | `tests/helpers/codex-workspace.ts` |
+| Topic                   | Path                                                  |
+| ----------------------- | ----------------------------------------------------- |
+| BUG-002 cwd policy      | `apps/api/src/utils/execution-working-directory.ts`   |
+| Cursor sessions         | `packages/providers/cursor/src/sessions.ts`           |
+| Cursor client cwd       | `packages/providers/cursor/src/client.ts`             |
+| Hub forward             | `connexto-aihub/internal/providers/connexto_proxy.go` |
+| Test helper IDE context | `tests/helpers/codex-workspace.ts`                    |
 
 ---
 
 ## Revision history
 
-| Date | Change |
-|------|--------|
+| Date       | Change                                                          |
+| ---------- | --------------------------------------------------------------- |
 | 2026-11-07 | Initial runbook after BUG-002 and edge-owned product discussion |

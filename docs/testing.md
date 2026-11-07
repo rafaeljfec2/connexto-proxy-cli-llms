@@ -13,16 +13,16 @@ pnpm lint
 
 ## Layers
 
-| Layer                 | Location                                          | Needs Cursor key            |
-| --------------------- | ------------------------------------------------- | --------------------------- |
-| API health / env      | `tests/health.test.ts`, `tests/env.test.ts`       | No                          |
-| HTTP Composer parity  | `tests/composer-api.test.ts`                      | No (mocked / stubbed paths) |
-| Logging               | `tests/logging.test.ts`                           | No                          |
-| Live HTTP integration | `tests/api.integration.test.ts`                   | **Yes**                     |
-| Core runtime          | `packages/core/tests/`                            | No                          |
-| Cursor provider       | `packages/providers/cursor/tests/`                | Integration only            |
-| Cursor engine / SDK   | `packages/providers/cursor/tests/engine/`, `sdk/` | No                          |
-| OpenAI protocol       | `packages/compatibility/openai/tests/`            | No                          |
+| Layer                  | Location                                          | Needs Cursor key            |
+| ---------------------- | ------------------------------------------------- | --------------------------- |
+| API health / env       | `tests/health.test.ts`, `tests/env.test.ts`       | No                          |
+| HTTP API compatibility | `tests/composer-api.test.ts`                      | No (mocked / stubbed paths) |
+| Logging                | `tests/logging.test.ts`                           | No                          |
+| Live HTTP integration  | `tests/api.integration.test.ts`                   | **Yes**                     |
+| Core runtime           | `packages/core/tests/`                            | No                          |
+| Cursor provider        | `packages/providers/cursor/tests/`                | Integration only            |
+| Cursor engine / SDK    | `packages/providers/cursor/tests/engine/`, `sdk/` | No                          |
+| OpenAI protocol        | `packages/compatibility/openai/tests/`            | No                          |
 
 ## Live integration
 

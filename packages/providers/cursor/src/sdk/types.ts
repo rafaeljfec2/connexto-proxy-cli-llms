@@ -10,14 +10,7 @@ export interface CursorSdkCompletion {
   agentId: string;
   runId: string;
   stream: AsyncGenerator<CursorTextEvent>;
-}
-
-export interface CursorSdkBridgeOutput {
-  text?: string;
-  toolCalls?: CursorToolCall[];
-  agentID?: string;
-  runID?: string;
-  status?: string;
+  cancel?: () => Promise<void>;
 }
 
 export interface ClientToolSpec {
@@ -60,19 +53,8 @@ export interface ToolSpec {
   argsKind: ArgsKind;
 }
 
-export interface ContainerBridgeBinding {
-  idFromName(name: string): unknown;
-  get(id: unknown): {
-    fetch(
-      url: string,
-      init: { method: string; headers: Headers; body: string; signal?: AbortSignal },
-    ): Promise<Response>;
-  };
-}
-
 export const SDK_SESSION_TTL_MS = 6 * 60 * 60 * 1000;
 export const AGENT_MODE_AGENT = 1;
 export const DEFAULT_SDK_CLIENT_VERSION = "sdk-1.0.13";
 export const SDK_STREAM_START_TIMEOUT_MS = 25_000;
-export const DEFAULT_SDK_BRIDGE_REQUEST_TIMEOUT_MS = 180_000;
 export const SDK_TOOL_RETRY_ATTEMPTS = 3;

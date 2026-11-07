@@ -11,10 +11,11 @@ Providers implement `@agent-runtime-gateway/core` **`AgentProvider`**. The HTTP 
 ### Capabilities
 
 - **Model listing** — `Cursor.models.list` / engine-backed listing (HTTP `/v1/models` uses the static Composer catalog; live listing is available on the provider class).
-- **Local agents** — `Agent.create` / `Agent.resume` with `local.cwd` set to the working directory.
-- **Execution** — `agent.send`, `run.stream`, `run.wait`, `run.cancel`.
-- **Session map** — in-memory `sessionId → agentId` with resume-first semantics.
-- **Engine port** — Connect/protobuf streaming, tool decoding, and filters adapted from [standardagents/composer-api](https://github.com/standardagents/composer-api) (not the Cloudflare Worker HTTP bridge).
+- **Hub edge-owned execution** — a request-scoped `@cursor/sdk` agent receives only the client tool inventory and returns one tool call at a time to the IDE client. It does not receive proxy filesystem or shell tools. The proxy checks tool names and JSON object shape; the receiving client must validate arguments against its declared schema before execution.
+- **Direct local-runtime execution** — `Agent.create` / `Agent.resume` with `local.cwd` set to the proxy-owned working directory.
+- **Execution** — both modes use `agent.send`, `run.stream`, `run.wait`, and `run.cancel`.
+- **Session map** — `CursorSessionManager` provides resume-first session continuity for direct local-runtime clients. Edge-owned prompts carry the request transcript and do not reuse a proxy workspace agent.
+- **Legacy engine** — Cursor Connect transport modules remain isolated for compatibility and are not used for hub-integrated HTTP requests.
 
 ### Credentials
 
@@ -30,7 +31,7 @@ Supported credential types on execute: `api_key`, `cursor_api_key` (see `package
 
 ### Working directory
 
-Chat/responses handlers pass the process current working directory unless overridden in future gateway config. Local Cursor tools operate relative to `local.cwd` on agent create/resume.
+The edge-owned path treats the IDE working directory as request context only; it is not opened or mutated by the proxy. Direct local-runtime tools operate relative to `local.cwd` on agent create/resume.
 
 ### Errors
 

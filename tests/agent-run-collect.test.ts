@@ -4,10 +4,14 @@ import {
   drainAgentRunEvents,
   openAiToolCallFromAgentEvent,
 } from "../apps/api/src/utils/agent-run-collect.js";
-import { collectRunOutput, confirmStreamingRunSuccess } from "../apps/api/src/utils/run.js";
+import {
+  collectRunOutput,
+  confirmStreamingRunSuccess,
+} from "../apps/api/src/utils/run.js";
 
 function stubRun(events: AgentEvent[], result: AgentResult): AgentRun {
-  function* gen() {
+  async function* gen() {
+    await Promise.resolve();
     for (const event of events) {
       yield event;
     }
@@ -27,7 +31,7 @@ const toolEvents: AgentEvent[] = [
     runId: "r",
     toolName: "list_dir",
     callId: "call_1",
-    arguments: "{\"path\":\".\"}",
+    arguments: '{"path":"."}',
   },
   { type: "run.completed", runId: "r" },
 ];
@@ -39,13 +43,15 @@ describe("agent-run-collect", () => {
     const output = await drainAgentRunEvents(run);
     expect(output.text).toBe("hi");
     expect(output.toolCalls).toHaveLength(1);
-    expect(openAiToolCallFromAgentEvent({
-      type: "tool.call",
-      runId: "r",
-      toolName: "list_dir",
-      callId: "call_1",
-      arguments: "{\"path\":\".\"}",
-    })).toEqual(output.toolCalls[0]);
+    expect(
+      openAiToolCallFromAgentEvent({
+        type: "tool.call",
+        runId: "r",
+        toolName: "list_dir",
+        callId: "call_1",
+        arguments: '{"path":"."}',
+      }),
+    ).toEqual(output.toolCalls[0]);
   });
 
   it("collectRunOutput returns tool calls", async () => {

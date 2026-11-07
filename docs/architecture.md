@@ -4,7 +4,7 @@
 
 Provide a **local HTTP gateway** that accepts OpenAI-compatible requests, resolves a provider from the model ID, runs agents through the selected provider, and returns normalized OpenAI-style responses (including SSE streams).
 
-**AI Hub + Codex (product direction):** The edge agent owns workspace and tools; the hub is opaque forward. Hub-integrated requests (`X-Gateway-API-Key`) default to **`edge_owned`** execution: remote Composer inference via the ported engine/SDK (`createCursorCompletion` / `createCursorSdkCompletion`) without a local `Agent.create` tool loop. Direct clients stay on **`local_runtime`** (`local.cwd`). See [runbooks/edge-owned-execution-plan.md](runbooks/edge-owned-execution-plan.md). Override with `CURSOR_EXECUTION_MODE=local|edge|auto`.
+**AI Hub + Codex:** The edge agent owns the workspace and executes client tools; the hub forwards requests opaquely. Hub-integrated requests (`X-Gateway-API-Key`) default to **`edge_owned`** execution through an in-process `@cursor/sdk` agent. The SDK agent has no proxy filesystem or shell tools; client tool calls are returned through the OpenAI-compatible response stream. Direct clients remain on **`local_runtime`**, where the proxy's Cursor agent owns local tools. See [providers.md](providers.md) and [configuration.md](configuration.md). Override with `CURSOR_EXECUTION_MODE=local|edge|auto`.
 
 ## Request flow
 
@@ -18,7 +18,7 @@ apps/api (Express)
     ▼
 RuntimeExecutor (@agent-runtime-gateway/core)
     │  ProviderRouter → CursorProvider or AntigravityProvider
-    ├─ packages/providers/cursor → @cursor/sdk and Cursor engine
+    ├─ packages/providers/cursor → @cursor/sdk edge and local runtimes
     └─ packages/providers/antigravity → agy ACP v1 stdio client → local Antigravity agent
 ```
 
@@ -28,7 +28,7 @@ RuntimeExecutor (@agent-runtime-gateway/core)
 
 - HTTP only: routes, middleware, logging, CORS, JSON body parsing.
 - Wires `createGatewayServices()` once per process (singleton).
-- Does **not** embed Cloudflare Worker or container bridge logic.
+- Does not require a second SDK bridge process for hub-integrated Cursor requests.
 
 ### `packages/core`
 
@@ -39,8 +39,10 @@ RuntimeExecutor (@agent-runtime-gateway/core)
 ### `packages/providers/cursor`
 
 - Implements `AgentProvider` (`id: "cursor"`).
-- Contains ported **engine** and **SDK bridge** modules from composer-api (`cursor.ts`, `cursor-sdk.ts`, crypto, protobuf tool specs).
-- Uses official SDK for local agent lifecycle where applicable; engine port handles Composer-specific streaming/tool behavior.
+- Uses the official `@cursor/sdk` for both execution modes.
+- Edge-owned runs use a request-scoped agent with client-only custom tools and return tool calls without executing them on proxy disk.
+- Local-runtime runs retain the session-managed agent and local workspace tools.
+- Legacy Cursor Connect engine modules remain isolated from the hub-integrated HTTP path.
 
 ### `packages/providers/antigravity`
 
@@ -68,7 +70,8 @@ Native `POST /v1/agents/run` from the original gateway roadmap is **not** presen
 ## Session continuity
 
 - HTTP layer: session affinity headers → gateway `sessionId`.
-- Cursor layer: `CursorSessionManager` maps session → remote `agentId`, prefers `Agent.resume`, falls back to `Agent.create`.
+- Cursor local-runtime layer: `CursorSessionManager` maps session → local SDK `agentId`, prefers `Agent.resume`, and falls back to `Agent.create`.
+- Cursor edge-owned layer: each request uses a restricted SDK agent and returns client tool calls; the request transcript is supplied by the OpenAI compatibility layer.
 - Antigravity layer: bounded in-memory mapping from gateway session → ACP session ID; each request resumes or creates the ACP session in a fresh process.
 - Responses API: `ResponseSessionStore` retains response metadata in memory (bounded store).
 

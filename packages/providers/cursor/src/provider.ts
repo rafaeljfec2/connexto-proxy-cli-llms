@@ -10,13 +10,7 @@ import type {
 } from "@agent-runtime-gateway/core";
 import type { Run, SDKAgent } from "@cursor/sdk";
 import { CursorClient } from "./client.js";
-import {
-  createCursorCompletion,
-  defaultCursorDeps,
-  defaultCursorEnv,
-  streamCursorText,
-  verifyCursorApiKey,
-} from "./cursor.js";
+import { defaultCursorDeps, defaultCursorEnv, verifyCursorApiKey } from "./cursor.js";
 import type { CursorMe } from "@agent-runtime-gateway/compatibility-openai";
 import { resolveCursorApiKey } from "./credential.js";
 import { normalizeCursorError } from "./errors.js";
@@ -35,8 +29,11 @@ import {
   type CursorSessionRecord,
 } from "./sessions.js";
 import { agentRunFromCursorTextStream } from "./edge-run.js";
-import { createCursorSdkCompletion } from "./cursor-sdk.js";
-import type { ClientToolSpec } from "./sdk/types.js";
+import {
+  createCursorSdkInProcessCompletion,
+  type CursorSdkInProcessInput,
+} from "./sdk-inprocess-runner.js";
+import type { CursorSdkCompletion } from "./sdk/types.js";
 import { ConfigurationError } from "@cursor/sdk";
 import { HttpError } from "@agent-runtime-gateway/compatibility-openai";
 
@@ -68,6 +65,7 @@ export interface CursorProviderOptions {
     onExecutionStart?: (input: { sessionId: string }) => void;
     onExecutionEnd?: (input: { sessionId: string }) => void;
   };
+  edgeOwnedRunner?: (input: CursorSdkInProcessInput) => Promise<CursorSdkCompletion>;
 }
 
 export class CursorProvider implements AgentProvider {
@@ -79,6 +77,9 @@ export class CursorProvider implements AgentProvider {
   private readonly defaultWorkingDirectory: string;
   private readonly listingCredential: () => string | undefined;
   private readonly executionGuard: CursorProviderOptions["executionGuard"];
+  private readonly edgeOwnedRunner: NonNullable<
+    CursorProviderOptions["edgeOwnedRunner"]
+  >;
 
   constructor(options: CursorProviderOptions = {}) {
     this.client = options.client ?? new CursorClient();
@@ -94,6 +95,8 @@ export class CursorProvider implements AgentProvider {
     this.listingCredential =
       options.listingCredential ?? (() => process.env.CURSOR_API_KEY);
     this.executionGuard = options.executionGuard;
+    this.edgeOwnedRunner =
+      options.edgeOwnedRunner ?? createCursorSdkInProcessCompletion;
   }
 
   getSessionManager(): CursorSessionManager {
@@ -184,61 +187,52 @@ export class CursorProvider implements AgentProvider {
     input: AgentExecutionInput,
     apiKey: string,
   ): Promise<AgentRun> {
-    const env = defaultCursorEnv();
-    const deps = defaultCursorDeps;
     const cursorContext = input.cursor;
-    const promptMode = cursorContext?.promptMode ?? "ask";
-    const clientTools = (cursorContext?.clientTools ?? []) as ClientToolSpec[];
-    const useSdkPath =
-      promptMode === "agent" ||
-      clientTools.length > 0 ||
-      cursorContext?.requiresLocalTool === true;
-
     this.executionGuard?.onExecutionStart?.({ sessionId: input.sessionId });
+    let executionEnded = false;
+    const endExecution = (): void => {
+      if (executionEnded) return;
+      executionEnded = true;
+      this.executionGuard?.onExecutionEnd?.({ sessionId: input.sessionId });
+    };
 
     try {
-      if (useSdkPath) {
-        const completion = await createCursorSdkCompletion(env, deps, apiKey, {
-          prompt: { text: input.message },
-          model: { id: input.model },
-          sessionKey: input.sessionId,
-          workingDirectory: input.workingDirectory,
-          clientTools: clientTools.length ? clientTools : undefined,
-          requiresLocalTool: cursorContext?.requiresLocalTool === true,
-        });
-
-        const run = agentRunFromCursorTextStream({
-          providerId: this.id,
-          sessionId: input.sessionId,
-          model: input.model,
-          runId: completion.runId,
-          stream: completion.stream,
-          signal: input.signal,
-        });
-        return guardAgentRun(run, () => {
-          this.executionGuard?.onExecutionEnd?.({ sessionId: input.sessionId });
-        });
-      }
-
-      const completion = await createCursorCompletion(env, deps, apiKey, {
-        prompt: { text: input.message, mode: promptMode },
-        model: { id: input.model },
-        conversationKey: input.sessionId,
+      const completion = await this.edgeOwnedRunner({
+        apiKey,
+        model: input.model,
+        agentName: this.agentName,
+        prompt: input.message,
+        clientTools: cursorContext?.clientTools ?? [],
+        ...(input.workingDirectory !== undefined
+          ? { workingDirectory: input.workingDirectory }
+          : {}),
+        ...(input.images !== undefined ? { images: input.images } : {}),
+        ...(input.signal !== undefined ? { signal: input.signal } : {}),
       });
+
+      if (input.signal?.aborted) {
+        await completion.cancel?.();
+        input.signal.throwIfAborted();
+      }
 
       const run = agentRunFromCursorTextStream({
         providerId: this.id,
         sessionId: input.sessionId,
         model: input.model,
-        runId: completion.requestId,
-        stream: streamCursorText(completion.stream),
+        runId: completion.runId,
+        stream: completion.stream,
         signal: input.signal,
+        cancel: async () => {
+          try {
+            await completion.cancel?.();
+          } finally {
+            endExecution();
+          }
+        },
       });
-      return guardAgentRun(run, () => {
-        this.executionGuard?.onExecutionEnd?.({ sessionId: input.sessionId });
-      });
+      return guardAgentRun(run, endExecution);
     } catch (error) {
-      this.executionGuard?.onExecutionEnd?.({ sessionId: input.sessionId });
+      endExecution();
       throwNormalized(error);
     }
   }
@@ -272,7 +266,13 @@ function guardAgentRun(run: AgentRun, onEnd: () => void): AgentRun {
         endOnce();
       }
     },
-    cancel: () => run.cancel(),
+    cancel: async () => {
+      try {
+        await run.cancel();
+      } finally {
+        endOnce();
+      }
+    },
   };
 }
 

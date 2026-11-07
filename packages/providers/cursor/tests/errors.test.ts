@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { ConfigurationError } from "@cursor/sdk";
 import { HttpError } from "@agent-runtime-gateway/compatibility-openai";
 import { normalizeCursorError } from "../src/errors.js";
@@ -18,7 +18,9 @@ describe("normalizeCursorError", () => {
 
 describe("cursorBackendUrl", () => {
   it("throws HttpError when CURSOR_BACKEND_BASE_URL is unset", () => {
-    expect(() => cursorBackendUrl({}, "/auth/exchange_user_api_key")).toThrow(HttpError);
+    expect(() => cursorBackendUrl({}, "/auth/exchange_user_api_key")).toThrow(
+      HttpError,
+    );
     try {
       cursorBackendUrl({}, "/auth/exchange_user_api_key");
     } catch (error) {
@@ -43,47 +45,34 @@ describe("CursorProvider throwNormalized", () => {
     ).rejects.toBeInstanceOf(ConfigurationError);
   });
 
-  it("rethrows HttpError from edge_owned SDK path instead of cursor_unknown_error", async () => {
-    const provider = new CursorProvider();
-    const previousBackend = process.env.CURSOR_BACKEND_BASE_URL;
-    const previousLocal = process.env.CURSOR_LOCAL_AGENT_ENDPOINT;
-    delete process.env.CURSOR_BACKEND_BASE_URL;
-    delete process.env.CURSOR_LOCAL_AGENT_ENDPOINT;
+  it("rethrows HttpError from the in-process edge SDK path", async () => {
+    const upstreamError = new HttpError(
+      "Cursor SDK request failed",
+      502,
+      "upstream_error",
+    );
+    const provider = new CursorProvider({
+      edgeOwnedRunner: vi.fn(() => Promise.reject(upstreamError)),
+    });
 
-    try {
-      await expect(
-        provider.execute({
-          credential: { type: "cursor_api_key", value: "test-key" },
-          model: "composer-2.5",
-          sessionId: "sess-missing-backend",
-          message: "hello",
-          cursor: { mode: "edge_owned", promptMode: "agent" },
-        }),
-      ).rejects.toBeInstanceOf(HttpError);
+    await expect(
+      provider.execute({
+        credential: { type: "cursor_api_key", value: "test-key" },
+        model: "composer-2.5",
+        sessionId: "sess-edge-error",
+        message: "hello",
+        cursor: { mode: "edge_owned", promptMode: "agent" },
+      }),
+    ).rejects.toBeInstanceOf(HttpError);
 
-      await expect(
-        provider.execute({
-          credential: { type: "cursor_api_key", value: "test-key" },
-          model: "composer-2.5",
-          sessionId: "sess-missing-backend",
-          message: "hello",
-          cursor: { mode: "edge_owned", promptMode: "agent" },
-        }),
-      ).rejects.toMatchObject({
-        code: "cursor_missing_backend_url",
-        status: 500,
-      });
-    } finally {
-      if (previousBackend === undefined) {
-        delete process.env.CURSOR_BACKEND_BASE_URL;
-      } else {
-        process.env.CURSOR_BACKEND_BASE_URL = previousBackend;
-      }
-      if (previousLocal === undefined) {
-        delete process.env.CURSOR_LOCAL_AGENT_ENDPOINT;
-      } else {
-        process.env.CURSOR_LOCAL_AGENT_ENDPOINT = previousLocal;
-      }
-    }
+    await expect(
+      provider.execute({
+        credential: { type: "cursor_api_key", value: "test-key" },
+        model: "composer-2.5",
+        sessionId: "sess-edge-error",
+        message: "hello",
+        cursor: { mode: "edge_owned", promptMode: "agent" },
+      }),
+    ).rejects.toMatchObject({ code: "upstream_error", status: 502 });
   });
 });

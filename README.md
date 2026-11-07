@@ -6,7 +6,7 @@ This is a **single-operator** project: no multi-tenant billing, no hosted SaaS f
 
 ## Features
 
-- **Express 5** API with Composer-style routes (ported from [standardagents/composer-api](https://github.com/standardagents/composer-api))
+- **Express 5** API with OpenAI-compatible gateway routes
 - **Cursor provider** via `@cursor/sdk` (local agents, session resume, streaming)
 - **OpenAI compatibility layer** (`@agent-runtime-gateway/compatibility-openai`) — chat, completions, responses, SSE, tool/MCP mapping
 - **Core runtime** (`@agent-runtime-gateway/core`) — registry, router, executor, shared contracts
