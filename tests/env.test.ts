@@ -1,4 +1,7 @@
-import { loadEnv } from "@agent-runtime-gateway/api";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { loadEnv, resolveSessionStoragePath } from "@agent-runtime-gateway/api";
 import { describe, expect, it } from "vitest";
 
 describe("loadEnv", () => {
@@ -71,6 +74,37 @@ describe("loadEnv", () => {
   it("rejects invalid PORT", () => {
     expect(() => loadEnv({ PORT: "abc" })).toThrow();
     expect(() => loadEnv({ PORT: "0" })).toThrow();
+  });
+
+  describe("SESSION_STORAGE_PATH", () => {
+    it("falls back to ~/.connexto-proxy/sessions on loopback when default path is not writable", () => {
+      const env = loadEnv({ HOST: "127.0.0.1" });
+      const expected = path.join(os.homedir(), ".connexto-proxy", "sessions");
+      if (!fs.existsSync("/var/lib/connexto-proxy/sessions")) {
+        expect(env.SESSION_STORAGE_PATH).toBe(expected);
+      } else {
+        try {
+          fs.accessSync("/var/lib/connexto-proxy/sessions", fs.constants.W_OK);
+          expect(env.SESSION_STORAGE_PATH).toBe("/var/lib/connexto-proxy/sessions");
+        } catch {
+          expect(env.SESSION_STORAGE_PATH).toBe(expected);
+        }
+      }
+    });
+
+    it("honors an explicit SESSION_STORAGE_PATH override", () => {
+      const custom = path.join(os.tmpdir(), "custom-sessions-dir");
+      const env = loadEnv({
+        HOST: "127.0.0.1",
+        SESSION_STORAGE_PATH: custom,
+      });
+      expect(env.SESSION_STORAGE_PATH).toBe(custom);
+      expect(
+        resolveSessionStoragePath("127.0.0.1", custom, {
+          SESSION_STORAGE_PATH: custom,
+        }),
+      ).toBe(custom);
+    });
   });
 
   describe("runtime lifecycle configuration", () => {

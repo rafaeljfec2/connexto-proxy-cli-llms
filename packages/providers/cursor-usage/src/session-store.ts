@@ -1,5 +1,6 @@
 import type { NamespacedSessionStore, SessionStore } from "@agent-runtime-gateway/core";
 import { createNamespacedStore } from "@agent-runtime-gateway/core";
+import { isUsableStorageState } from "./session-validation.js";
 import type { CursorUsageSessionRecord } from "./types.js";
 
 export interface CursorUsageSessionStoreOptions {
@@ -76,15 +77,24 @@ export class CursorUsageSessionStore {
     return undefined;
   }
 
-  public async setPersisted(record: CursorUsageSessionRecord): Promise<void> {
+  public async setPersisted(record: CursorUsageSessionRecord): Promise<boolean> {
+    if (!isUsableStorageState(record.storageState)) {
+      return false;
+    }
     const now = this.now();
     this.removeExpired(now);
     const next: CursorUsageSessionRecord = { ...record, touchedAt: now };
     this.sessions.set(record.accountId, next);
     if (this.store !== undefined) {
-      await this.store.set(record.accountId, next);
+      try {
+        await this.store.set(record.accountId, next);
+      } catch (error) {
+        this.sessions.delete(record.accountId);
+        throw error;
+      }
     }
     this.evictOverflow();
+    return true;
   }
 
   public clearMemory(): void {

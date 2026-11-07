@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import process from "node:process";
 import { z } from "zod";
@@ -133,6 +134,54 @@ const envSchema = z
 
 export type Env = Readonly<z.infer<typeof envSchema>>;
 
+const DEFAULT_SESSION_STORAGE_PATH = "/var/lib/connexto-proxy/sessions";
+
+function sessionStoragePathIsWritable(targetPath: string): boolean {
+  try {
+    fs.mkdirSync(targetPath, { recursive: true, mode: 0o700 });
+    fs.accessSync(targetPath, fs.constants.W_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function resolveSessionStoragePath(
+  host: string,
+  parsedPath: string,
+  source: NodeJS.ProcessEnv,
+): string {
+  const explicit = source.SESSION_STORAGE_PATH?.trim();
+  if (
+    explicit !== undefined &&
+    explicit.length > 0 &&
+    explicit !== DEFAULT_SESSION_STORAGE_PATH
+  ) {
+    return parsedPath;
+  }
+
+  if (!isLoopbackHost(host)) {
+    return parsedPath;
+  }
+
+  if (sessionStoragePathIsWritable(parsedPath)) {
+    return parsedPath;
+  }
+
+  const fallback = path.join(os.homedir(), ".connexto-proxy", "sessions");
+  if (fallback !== parsedPath) {
+    console.warn(
+      JSON.stringify({
+        level: "warn",
+        msg: "session_storage_path_fallback",
+        configured: parsedPath,
+        fallback,
+      }),
+    );
+  }
+  return fallback;
+}
+
 export function findEnvFile(startDir = process.cwd()): string | undefined {
   let currentDir = startDir;
   while (true) {
@@ -185,5 +234,12 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
     throw new Error("GATEWAY_API_TOKENS must be different from GATEWAY_API_TOKEN");
   }
 
-  return env;
+  return {
+    ...env,
+    SESSION_STORAGE_PATH: resolveSessionStoragePath(
+      env.HOST,
+      env.SESSION_STORAGE_PATH,
+      source,
+    ),
+  };
 }

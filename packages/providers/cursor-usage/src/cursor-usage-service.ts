@@ -7,6 +7,7 @@ import {
   SessionExpiredError,
   type PlaywrightBrowserPool as BrowserPoolType,
 } from "./playwright-browser.js";
+import { isUsableStorageState } from "./session-validation.js";
 import { CursorUsageSessionStore } from "./session-store.js";
 import type {
   CursorUsageAuthOperation,
@@ -87,7 +88,7 @@ export class CursorUsageService {
           accountId,
         };
       }
-      if (session.storageState === undefined) {
+      if (!isUsableStorageState(session.storageState)) {
         await this.sessionStore.delete(accountId);
         return {
           status: "authentication_required",
@@ -125,7 +126,7 @@ export class CursorUsageService {
           ...session,
           status: "authenticated",
           storageState,
-        });
+        }).catch(() => undefined);
         return {
           status: "available",
           provider: "cursor",
@@ -211,14 +212,55 @@ export class CursorUsageService {
         const url = live.page.url();
         if (this.authenticatedUrlPattern.test(url)) {
           const storageState = await this.browserPool.captureStorageState(sessionId);
-          operation.status = "authenticated";
-          await this.sessionStore.setPersisted({
-            accountId: operation.accountId,
-            status: "authenticated",
-            touchedAt: this.now(),
-            storageState,
-          });
-          await this.browserPool.closeAuthSession(sessionId);
+          if (!isUsableStorageState(storageState)) {
+            // Wait for OAuth cookies before promoting to authenticated.
+          } else {
+            try {
+              const written = await this.sessionStore.setPersisted({
+                accountId: operation.accountId,
+                status: "authenticated",
+                touchedAt: this.now(),
+                storageState,
+              });
+              const resolved = written
+                ? await this.sessionStore.resolve(operation.accountId)
+                : undefined;
+              if (
+                written &&
+                resolved !== undefined &&
+                isUsableStorageState(resolved.storageState)
+              ) {
+                operation.status = "authenticated";
+                await this.browserPool.closeAuthSession(sessionId);
+              } else {
+                console.warn(
+                  JSON.stringify({
+                    level: "warn",
+                    msg: "session_persist_failed",
+                    accountId: operation.accountId,
+                    reason: written ? "resolve_empty_after_write" : "set_persisted_rejected",
+                  }),
+                );
+              }
+            } catch (error) {
+              const errno =
+                error !== null &&
+                typeof error === "object" &&
+                "code" in error &&
+                typeof (error as NodeJS.ErrnoException).code === "string"
+                  ? (error as NodeJS.ErrnoException).code
+                  : undefined;
+              console.warn(
+                JSON.stringify({
+                  level: "warn",
+                  msg: "session_persist_failed",
+                  accountId: operation.accountId,
+                  errno,
+                  message: error instanceof Error ? error.message : String(error),
+                }),
+              );
+            }
+          }
         }
       }
     }
@@ -242,7 +284,7 @@ export class CursorUsageService {
     if (
       session === undefined ||
       session.status !== "authenticated" ||
-      session.storageState === undefined
+      !isUsableStorageState(session.storageState)
     ) {
       return {
         status: "authentication_required",

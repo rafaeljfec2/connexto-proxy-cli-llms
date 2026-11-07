@@ -24,3 +24,21 @@
 | HTTP routes | `apps/api/src/routes/cursor-usage.ts` |
 | Hub collect/auth client | `internal/providers/cursor_usage_proxy.go` |
 | Spike smoke | `spikes/cursor-usage-phase-b/` |
+
+## Manual acceptance (loopback proxy)
+
+After web login on the same proxy as the provider endpoint (e.g. `pnpm dev` on port 9090):
+
+```bash
+GW="<gateway-api-key>"
+ACCOUNT="<provider-id>"   # e.g. cursor
+BASE="http://127.0.0.1:9090/v1"
+curl -s "$BASE/providers/cursor/usage/session?accountId=$ACCOUNT" -H "X-Gateway-API-Key: $GW"
+curl -s -X POST "$BASE/providers/cursor/usage/collect" \
+  -H "Content-Type: application/json" -H "X-Gateway-API-Key: $GW" \
+  -d "{\"accountId\":\"$ACCOUNT\"}"
+```
+
+Expected after login: session JSON `authenticated`; collect JSON `available` (or `session_expired` if cookies expired — not `authentication_required`).
+
+Confirm on-disk file: `~/.connexto-proxy/sessions/cursor-usage/<accountId>.json` when `SESSION_STORAGE_PATH` points at home (default fallback on loopback when `/var/lib/...` is not writable).

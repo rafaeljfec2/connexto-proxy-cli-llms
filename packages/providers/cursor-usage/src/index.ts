@@ -4,6 +4,7 @@ export {
   BrowserUnavailableError,
   PlaywrightBrowserPool,
 } from "./playwright-browser.js";
+export { isUsableStorageState } from "./session-validation.js";
 export { CURSOR_USAGE_NAMESPACE } from "./types.js";
 export type {
   CursorUsageAuthStartResult,

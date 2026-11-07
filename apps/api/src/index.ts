@@ -3,6 +3,7 @@ export {
   findEnvFile,
   loadEnv,
   loadEnvFileIfPresent,
+  resolveSessionStoragePath,
   type Env,
   type LogFormat,
   type LogLevel,

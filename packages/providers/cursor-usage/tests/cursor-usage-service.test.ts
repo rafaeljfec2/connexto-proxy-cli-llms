@@ -6,6 +6,17 @@ import { InMemorySessionStore, createNamespacedStore } from "@agent-runtime-gate
 import type { CursorUsageSessionRecord } from "../src/types.js";
 import { CURSOR_USAGE_NAMESPACE } from "../src/types.js";
 
+const cursorDomainCookie = {
+  name: "session",
+  value: "x",
+  domain: "cursor.com",
+  path: "/",
+  expires: -1,
+  httpOnly: true,
+  secure: true,
+  sameSite: "Lax" as const,
+};
+
 describe("CursorUsageService", () => {
   it("returns authentication_required when no session", async () => {
     const service = new CursorUsageService({
@@ -24,7 +35,7 @@ describe("CursorUsageService", () => {
       accountId: "acct-2",
       status: "authenticated",
       touchedAt: Date.now(),
-      storageState: { cookies: [], origins: [] },
+      storageState: { cookies: [cursorDomainCookie], origins: [] },
     });
 
     const pool = createStubPool({
@@ -51,12 +62,15 @@ describe("CursorUsageService", () => {
       accountId: "acct-api",
       status: "authenticated",
       touchedAt: Date.now(),
-      storageState: { cookies: [], origins: [] },
+      storageState: { cookies: [cursorDomainCookie], origins: [] },
     });
 
     const pool = createStubPool();
     const mockContext = {
-      storageState: vi.fn(async () => ({ cookies: [], origins: [] })),
+      storageState: vi.fn(async () => ({
+        cookies: [cursorDomainCookie],
+        origins: [],
+      })),
       close: vi.fn(async () => undefined),
       request: {
         get: vi.fn(async (url: string) => {
@@ -84,7 +98,26 @@ describe("CursorUsageService", () => {
     expect(pool.waitForUsageJson).not.toHaveBeenCalled();
   });
 
-  it("marks auth complete when login lands on grok.com/dashboard", async () => {
+  it("returns authentication_required when session cookies are not usable", async () => {
+    const store = createNamespacedStore(
+      new InMemorySessionStore<CursorUsageSessionRecord>(),
+      CURSOR_USAGE_NAMESPACE,
+    );
+    await store.set("acct-bad", {
+      accountId: "acct-bad",
+      status: "authenticated",
+      touchedAt: Date.now(),
+      storageState: { cookies: [], origins: [] },
+    });
+    const service = new CursorUsageService({
+      store,
+      browserPool: createStubPool(),
+    });
+    const result = await service.collectUsage("acct-bad");
+    expect(result.status).toBe("authentication_required");
+  });
+
+  it("stays pending when login lands on grok.com/dashboard without cookies", async () => {
     const store = createNamespacedStore(
       new InMemorySessionStore<CursorUsageSessionRecord>(),
       CURSOR_USAGE_NAMESPACE,
@@ -108,7 +141,7 @@ describe("CursorUsageService", () => {
     const started = await service.startAuth("acct-grok");
     const status = await service.getAuthStatus(started.sessionId);
 
-    expect(status.status).toBe("authenticated");
+    expect(status.status).toBe("authentication_pending");
   });
 
   it("marks auth complete when social login lands on cursor.com/agents", async () => {
@@ -126,7 +159,7 @@ describe("CursorUsageService", () => {
         }) as never,
     );
     pool.captureStorageState = vi.fn(async () => ({
-      cookies: [{ name: "session", value: "x", domain: "cursor.com", path: "/", expires: -1, httpOnly: true, secure: true, sameSite: "Lax" as const }],
+      cookies: [cursorDomainCookie],
       origins: [],
     }));
     pool.closeAuthSession = vi.fn(async () => undefined);
