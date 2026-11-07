@@ -1,5 +1,8 @@
 import type { Express, Request, Response, NextFunction } from "express";
-import { BrowserUnavailableError } from "@agent-runtime-gateway/provider-cursor-usage";
+import {
+  BrowserUnavailableError,
+  browserUnavailableDetail,
+} from "@agent-runtime-gateway/provider-cursor-usage";
 import { getGatewayServices } from "../services/gateway.js";
 
 export const CURSOR_USAGE_COLLECT_ROUTE = "/v1/providers/cursor/usage/collect";
@@ -77,6 +80,10 @@ export function registerCursorUsageRoutes(app: Express): void {
             : result.status === "authentication_required" ||
                 result.status === "session_expired"
               ? 401
+              : result.status === "authentication_pending"
+                ? 409
+                : result.status === "challenge_required"
+                  ? 403
               : result.status === "browser_unavailable"
                 ? 503
                 : result.status === "timeout"
@@ -105,7 +112,7 @@ export function registerCursorUsageRoutes(app: Express): void {
         if (error instanceof BrowserUnavailableError) {
           res.status(503).json({
             status: "browser_unavailable",
-            message: "Chromium is unavailable",
+            message: browserUnavailableDetail(error.cause ?? error.message),
           });
           return;
         }

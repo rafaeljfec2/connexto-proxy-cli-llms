@@ -2,12 +2,16 @@ import crypto from "node:crypto";
 import { AccountLockMap } from "./account-lock.js";
 import {
   BrowserUnavailableError,
+  ChallengeRequiredError,
   CollectionFailedError,
   PlaywrightBrowserPool,
   SessionExpiredError,
   type PlaywrightBrowserPool as BrowserPoolType,
 } from "./playwright-browser.js";
-import { isUsableStorageState } from "./session-validation.js";
+import {
+  isCollectableSessionRecord,
+  isUsableStorageState,
+} from "./session-validation.js";
 import { CursorUsageSessionStore } from "./session-store.js";
 import type {
   CursorUsageAuthOperation,
@@ -26,9 +30,12 @@ import {
 
 const DEFAULT_LOGIN = "https://authenticator.cursor.sh/";
 const DEFAULT_USAGE_PATTERN = /usage-status|get-user-analytics/i;
-/** Post-OAuth landings include /agents (social) and /dashboard (usage UI). */
+/** OAuth may land on cursor.com before usage UI on grok.com/dashboard. */
 const DEFAULT_AUTHENTICATED_URL_PATTERN =
   /(^https?:\/\/)?(?:([^/]+\.)?cursor\.com\/(dashboard|settings|agents)|grok\.com\/dashboard)(\/?|$|\?)/i;
+/** Collect-ready only when the usage dashboard (and x.ai cookies) is reachable. */
+const DEFAULT_COLLECT_READY_URL_PATTERN =
+  /(^https?:\/\/)?([^/]+\.)?grok\.com\/dashboard(\/?|$|\?)/i;
 
 export class CursorUsageService {
   private readonly sessionStore: CursorUsageSessionStore;
@@ -44,6 +51,7 @@ export class CursorUsageService {
   private readonly usageAnalyticsUrl?: string;
   private readonly usageUrlPattern: RegExp;
   private readonly authenticatedUrlPattern: RegExp;
+  private readonly collectReadyUrlPattern: RegExp;
   private readonly interactionUrlBase: string;
   private readonly authHeadless: boolean;
   private readonly now: () => number;
@@ -74,21 +82,34 @@ export class CursorUsageService {
     this.usageUrlPattern = options.usageResponseUrlPattern ?? DEFAULT_USAGE_PATTERN;
     this.authenticatedUrlPattern =
       options.authenticatedUrlPattern ?? DEFAULT_AUTHENTICATED_URL_PATTERN;
+    this.collectReadyUrlPattern =
+      options.collectReadyUrlPattern ?? DEFAULT_COLLECT_READY_URL_PATTERN;
     this.interactionUrlBase = options.interactionUrlBase ?? "";
     this.authHeadless = options.authHeadless !== false;
   }
 
   public async collectUsage(accountId: string): Promise<CursorUsageCollectResult> {
     return this.locks.run(accountId, async () => {
-      const session = await this.sessionStore.resolve(accountId);
-      if (session === undefined || session.status !== "authenticated") {
+      if (this.browserPool.hasActiveAuthForAccount(accountId)) {
         return {
-          status: "authentication_required",
+          status: "authentication_pending",
           provider: "cursor",
           accountId,
         };
       }
-      if (!isUsableStorageState(session.storageState)) {
+      const session = await this.sessionStore.resolve(accountId);
+      const profilePresent = this.browserPool.hasAuthProfile(accountId);
+      if (session === undefined || session.status !== "authenticated") {
+        if (!profilePresent) {
+          return {
+            status: "authentication_required",
+            provider: "cursor",
+            accountId,
+          };
+        }
+      } else if (
+        !isCollectableSessionRecord(session, profilePresent)
+      ) {
         await this.sessionStore.delete(accountId);
         return {
           status: "authentication_required",
@@ -98,10 +119,18 @@ export class CursorUsageService {
       }
 
       try {
+        const restoredState =
+          session?.storageState ?? { cookies: [], origins: [] };
         const context = await this.browserPool.restoreAuthenticatedSession(
           accountId,
-          session.storageState,
+          restoredState,
         );
+        await this.browserPool.primeCollectDashboard({
+          context,
+          dashboardUrl: this.collectDashboardUrl,
+          urlPattern: this.usageUrlPattern,
+          timeoutMs: this.collectTimeoutMs,
+        });
         let usage: Record<string, unknown>;
         let collectionMethod: string;
         try {
@@ -122,11 +151,26 @@ export class CursorUsageService {
         }
         const storageState = await context.storageState();
         await context.close();
-        await this.sessionStore.setPersisted({
-          ...session,
-          status: "authenticated",
-          storageState,
-        }).catch(() => undefined);
+        const persistTarget =
+          session ??
+          ({
+            accountId,
+            status: "authenticated",
+            touchedAt: this.now(),
+          } as const);
+        await this.sessionStore
+          .setPersisted(
+            {
+              ...persistTarget,
+              status: "authenticated",
+              storageState,
+            },
+            {
+              allowAuthProfileFallback:
+                profilePresent && !isUsableStorageState(storageState),
+            },
+          )
+          .catch(() => undefined);
         return {
           status: "available",
           provider: "cursor",
@@ -139,6 +183,9 @@ export class CursorUsageService {
           },
         };
       } catch (error) {
+        if (error instanceof ChallengeRequiredError) {
+          return { status: "challenge_required", provider: "cursor", accountId };
+        }
         if (error instanceof SessionExpiredError) {
           await this.sessionStore.delete(accountId);
           return { status: "session_expired", provider: "cursor", accountId };
@@ -210,27 +257,54 @@ export class CursorUsageService {
       const live = this.browserPool.getLiveAuth(sessionId);
       if (live !== undefined) {
         const url = live.page.url();
-        if (this.authenticatedUrlPattern.test(url)) {
+        if (this.collectReadyUrlPattern.test(url)) {
+          if (await this.browserPool.pageHasUpstreamChallenge(live.page)) {
+            operation.status = "challenge_required";
+            return {
+              sessionId,
+              accountId: operation.accountId,
+              status: operation.status,
+              expiresAt: new Date(operation.expiresAt).toISOString(),
+            };
+          }
           const storageState = await this.browserPool.captureStorageState(sessionId);
-          if (!isUsableStorageState(storageState)) {
+          const profileReady = this.browserPool.hasAuthProfile(operation.accountId);
+          if (!isUsableStorageState(storageState) && !profileReady) {
             // Wait for OAuth cookies before promoting to authenticated.
           } else {
             try {
-              const written = await this.sessionStore.setPersisted({
-                accountId: operation.accountId,
-                status: "authenticated",
-                touchedAt: this.now(),
-                storageState,
-              });
+              const written = await this.sessionStore.setPersisted(
+                {
+                  accountId: operation.accountId,
+                  status: "authenticated",
+                  touchedAt: this.now(),
+                  storageState,
+                },
+                { allowAuthProfileFallback: profileReady },
+              );
               const resolved = written
                 ? await this.sessionStore.resolve(operation.accountId)
                 : undefined;
               if (
                 written &&
                 resolved !== undefined &&
-                isUsableStorageState(resolved.storageState)
+                isCollectableSessionRecord(resolved, profileReady)
               ) {
                 operation.status = "authenticated";
+                try {
+                  const refreshedState =
+                    await this.browserPool.captureStorageState(sessionId);
+                  if (isUsableStorageState(refreshedState)) {
+                    await this.sessionStore.setPersisted({
+                      accountId: operation.accountId,
+                      status: "authenticated",
+                      touchedAt: this.now(),
+                      storageState: refreshedState,
+                    });
+                  }
+                } catch {
+                  // Best-effort refresh before closing headed browser.
+                }
                 await this.browserPool.closeAuthSession(sessionId);
               } else {
                 console.warn(
@@ -281,11 +355,19 @@ export class CursorUsageService {
     readonly touchedAt?: string;
   }> {
     const session = await this.sessionStore.resolve(accountId);
+    const profilePresent = this.browserPool.hasAuthProfile(accountId);
     if (
       session === undefined ||
       session.status !== "authenticated" ||
-      !isUsableStorageState(session.storageState)
+      !isCollectableSessionRecord(session, profilePresent)
     ) {
+      if (profilePresent) {
+        return {
+          status: "authenticated",
+          accountId,
+          touchedAt: new Date(this.now()).toISOString(),
+        };
+      }
       return {
         status: "authentication_required",
         accountId,

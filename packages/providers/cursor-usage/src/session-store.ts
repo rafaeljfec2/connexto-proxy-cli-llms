@@ -77,13 +77,27 @@ export class CursorUsageSessionStore {
     return undefined;
   }
 
-  public async setPersisted(record: CursorUsageSessionRecord): Promise<boolean> {
-    if (!isUsableStorageState(record.storageState)) {
+  public async setPersisted(
+    record: CursorUsageSessionRecord,
+    options?: { allowAuthProfileFallback?: boolean },
+  ): Promise<boolean> {
+    const storageOk = isUsableStorageState(record.storageState);
+    if (!storageOk && !options?.allowAuthProfileFallback) {
       return false;
     }
     const now = this.now();
     this.removeExpired(now);
-    const next: CursorUsageSessionRecord = { ...record, touchedAt: now };
+    const next: CursorUsageSessionRecord = {
+      ...record,
+      touchedAt: now,
+      authProfileBacked:
+        !storageOk && options?.allowAuthProfileFallback === true
+          ? true
+          : record.authProfileBacked,
+      storageState: storageOk
+        ? record.storageState
+        : (record.storageState ?? { cookies: [], origins: [] }),
+    };
     this.sessions.set(record.accountId, next);
     if (this.store !== undefined) {
       try {

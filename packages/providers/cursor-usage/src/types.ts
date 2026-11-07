@@ -27,6 +27,8 @@ export interface CursorUsageSessionRecord {
   status: CursorUsageAuthStatus | "authenticated";
   touchedAt: number;
   storageState?: StorageState;
+  /** Headed OAuth left a Chromium profile on disk when storageState lacked exportable cookies. */
+  authProfileBacked?: boolean;
 }
 
 export interface CursorUsageAuthOperation {
@@ -84,6 +86,7 @@ export interface CursorUsageServiceOptions {
   readonly usageAnalyticsUrl?: string;
   readonly usageResponseUrlPattern?: RegExp;
   readonly authenticatedUrlPattern?: RegExp;
+  readonly collectReadyUrlPattern?: RegExp;
   readonly chromiumExecutablePath?: string;
   readonly authHeadless?: boolean;
   readonly authUserDataDirRoot?: string;

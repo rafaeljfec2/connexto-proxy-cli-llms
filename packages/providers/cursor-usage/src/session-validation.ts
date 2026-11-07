@@ -1,7 +1,7 @@
-import type { StorageState } from "./types.js";
+import type { CursorUsageSessionRecord, StorageState } from "./types.js";
 
 const RELEVANT_COOKIE_DOMAIN =
-  /(?:^|\.)(cursor\.com|grok\.com|authenticator\.cursor\.sh)$/i;
+  /(?:^|\.)(cursor\.com|cursor\.sh|grok\.com|authenticator\.cursor\.sh|workos\.com)$/i;
 
 export function isUsableStorageState(
   state: StorageState | undefined,
@@ -16,4 +16,17 @@ export function isUsableStorageState(
   return cookies.some((cookie) =>
     RELEVANT_COOKIE_DOMAIN.test(cookie.domain ?? ""),
   );
+}
+
+export function isCollectableSessionRecord(
+  record: Pick<CursorUsageSessionRecord, "storageState" | "authProfileBacked">,
+  authProfilePresent: boolean,
+): boolean {
+  if (isUsableStorageState(record.storageState)) {
+    return true;
+  }
+  if (record.authProfileBacked === true) {
+    return true;
+  }
+  return authProfilePresent;
 }

@@ -144,7 +144,7 @@ describe("CursorUsageService", () => {
     expect(status.status).toBe("authentication_pending");
   });
 
-  it("marks auth complete when social login lands on cursor.com/agents", async () => {
+  it("stays pending when login stops on cursor.com/agents", async () => {
     const store = createNamespacedStore(
       new InMemorySessionStore<CursorUsageSessionRecord>(),
       CURSOR_USAGE_NAMESPACE,
@@ -158,6 +158,30 @@ describe("CursorUsageService", () => {
           context: {},
         }) as never,
     );
+
+    const service = new CursorUsageService({ store, browserPool: pool });
+    const started = await service.startAuth("acct-agents-only");
+    const status = await service.getAuthStatus(started.sessionId);
+
+    expect(status.status).toBe("authentication_pending");
+    expect(pool.captureStorageState).not.toHaveBeenCalled();
+  });
+
+  it("marks auth complete when login reaches grok.com/dashboard", async () => {
+    const store = createNamespacedStore(
+      new InMemorySessionStore<CursorUsageSessionRecord>(),
+      CURSOR_USAGE_NAMESPACE,
+    );
+    const pool = createStubPool();
+    pool.openAuthSession = vi.fn(async () => ({}) as never);
+    pool.getLiveAuth = vi.fn(
+      () =>
+        ({
+          page: { url: () => "https://grok.com/dashboard" },
+          context: {},
+        }) as never,
+    );
+    pool.pageHasUpstreamChallenge = vi.fn(async () => false);
     pool.captureStorageState = vi.fn(async () => ({
       cookies: [cursorDomainCookie],
       origins: [],
@@ -187,11 +211,15 @@ function createStubPool(options: { usageJson?: unknown } = {}): PlaywrightBrowse
 
   const stub = Object.create(PlaywrightBrowserPool.prototype) as PlaywrightBrowserPool;
   stub.restoreAuthenticatedSession = vi.fn(async () => mockContext);
+  stub.primeCollectDashboard = vi.fn(async () => undefined);
   stub.waitForUsageJson = vi.fn(async () => options.usageJson ?? {});
   stub.openAuthSession = vi.fn();
   stub.getLiveAuth = vi.fn();
   stub.closeAuthSession = vi.fn();
   stub.captureStorageState = vi.fn();
+  stub.pageHasUpstreamChallenge = vi.fn(async () => false);
+  stub.hasActiveAuthForAccount = vi.fn(() => false);
+  stub.hasAuthProfile = vi.fn(() => false);
   stub.shutdown = vi.fn();
   return stub;
 }
