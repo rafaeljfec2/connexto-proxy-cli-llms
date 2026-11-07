@@ -1,3 +1,4 @@
+import path from "node:path";
 import type { CursorImage } from "../../types.js";
 import type { ToolCallContext } from "../types.js";
 import { HttpError } from "../../http.js";
@@ -238,6 +239,8 @@ export function toolCallContextFromResponseInput(
 
 export function workingDirectoryFromText(text: string): string | undefined {
   for (const pattern of [
+    /<cwd>\s*([^<]+?)\s*<\/cwd>/i,
+    /<root>\s*([^<]+?)\s*<\/root>/i,
     /^\s*Working directory:\s*(.+)$/im,
     /^\s*[-*]\s*Working directory:\s*(.+)$/im,
     /^\s*Current working directory:\s*(.+)$/im,
@@ -253,6 +256,12 @@ export function workingDirectoryFromText(text: string): string | undefined {
   ]) {
     const match = pattern.exec(text);
     const value = sanitizeContextPath(match?.[1]);
+    if (value) return value;
+  }
+  const activeFileMatch = /^\s*##\s*Active file:\s*(.+)$/im.exec(text);
+  if (activeFileMatch?.[1]) {
+    const parent = path.dirname(activeFileMatch[1].trim());
+    const value = sanitizeContextPath(parent);
     if (value) return value;
   }
   return undefined;

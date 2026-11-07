@@ -13,6 +13,7 @@ import { registerCursorUsageRoutes } from "./routes/cursor-usage.js";
 import { registerRuntimeRoutes } from "./routes/runtime.js";
 import { registerSwaggerRoutes } from "./routes/swagger.js";
 import { loadEnv, type Env } from "./config/env.js";
+import { configureCursorExecutionMode } from "./utils/cursor-execution-mode.js";
 import { createGatewayAuthMiddleware } from "./utils/gateway-auth.js";
 import { createCorsMiddleware } from "./utils/cors.js";
 import { getLogger } from "./utils/logger.js";
@@ -30,10 +31,14 @@ export function buildApp(
         | "LOG_HTTP_PAYLOADS"
         | "LOG_HTTP_PAYLOAD_MAX_BYTES"
         | "GATEWAY_JSON_BODY_LIMIT_BYTES"
+        | "CURSOR_EXECUTION_MODE"
       >
     > = loadEnv(),
 ): Express {
   const jsonBodyLimitBytes = config.GATEWAY_JSON_BODY_LIMIT_BYTES ?? 32 * 1024 * 1024;
+  configureCursorExecutionMode(
+    config.CURSOR_EXECUTION_MODE ?? loadEnv().CURSOR_EXECUTION_MODE,
+  );
   const app = express();
 
   // Server-generated correlation ID per request and response summary logging

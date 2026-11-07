@@ -1,4 +1,8 @@
-import { collectRunText, confirmStreamingRunSuccess } from "../../utils/run.js";
+import {
+  collectRunOutput,
+  confirmStreamingRunSuccess,
+} from "../../utils/run.js";
+import { openAiToolCallFromAgentEvent } from "../../utils/agent-run-collect.js";
 import crypto from "node:crypto";
 import { performance } from "node:perf_hooks";
 import type { Request, Response } from "express";
@@ -12,6 +16,7 @@ import {
   responseDoneEvents,
   responseObject,
   responseTextStartEvents,
+  responseToolCallEvents,
 } from "@agent-runtime-gateway/compatibility-openai";
 import { getGatewayServices } from "../../services/gateway.js";
 import { resolveRequestApiKey } from "../../utils/auth.js";
@@ -27,6 +32,8 @@ import {
   providerRequiresLocalWorkspace,
   resolveExecutionWorkingDirectory,
 } from "../../utils/execution-working-directory.js";
+import { resolveCursorExecutionModeForRequest } from "../../utils/cursor-execution-mode.js";
+import { buildCursorExecutionContext } from "../../utils/cursor-execution-payload.js";
 import {
   assertAntigravityToolsUnsupported,
   providerCredential,
@@ -122,6 +129,10 @@ export async function handleCreateResponse(req: Request, res: Response): Promise
     );
 
     const hubIntegrated = isHubIntegratedRequest(req);
+    const cursorExecutionMode =
+      target.providerId === "cursor"
+        ? resolveCursorExecutionModeForRequest(req)
+        : undefined;
     const workingDirectory = resolveExecutionWorkingDirectory({
       hubIntegrated,
       configuredDefault: getConfiguredDefaultWorkingDirectory(),
@@ -130,7 +141,8 @@ export async function handleCreateResponse(req: Request, res: Response): Promise
     if (
       hubIntegrated &&
       providerRequiresLocalWorkspace(target.providerId) &&
-      workingDirectory === undefined
+      workingDirectory === undefined &&
+      cursorExecutionMode === "local_runtime"
     ) {
       res.status(422).json(
         openAiErrorPayload(
@@ -150,6 +162,9 @@ export async function handleCreateResponse(req: Request, res: Response): Promise
       credential: providerCredential(target, apiKey),
       signal: cancellation.signal,
       ...(workingDirectory !== undefined ? { workingDirectory } : {}),
+      ...(target.providerId === "cursor"
+        ? { cursor: buildCursorExecutionContext(req, prepared) }
+        : {}),
       ...executionImagesInput(images),
     });
 
@@ -171,6 +186,8 @@ export async function handleCreateResponse(req: Request, res: Response): Promise
 
       let fullText = "";
       let firstDeltaMs: number | undefined;
+      const toolCalls: ReturnType<typeof openAiToolCallFromAgentEvent>[] = [];
+      let streamFailed = false;
 
       for await (const event of run.events) {
         if (cancellation.signal.aborted) break;
@@ -180,11 +197,21 @@ export async function handleCreateResponse(req: Request, res: Response): Promise
           }
           fullText += event.delta;
           res.write(responseDeltaEvent({ id, delta: event.delta, outputIndex: 0 }));
+        } else if (event.type === "tool.call") {
+          const toolCall = openAiToolCallFromAgentEvent(event);
+          toolCalls.push(toolCall);
+          const outputIndex = toolCalls.length;
+          for (const frame of responseToolCallEvents({ id, toolCall, outputIndex })) {
+            res.write(frame);
+          }
+        } else if (event.type === "run.failed") {
+          streamFailed = true;
+          break;
         }
       }
 
       if (cancellation.signal.aborted) return;
-      if (!(await confirmStreamingRunSuccess(run, target.providerId, res))) {
+      if (streamFailed || !(await confirmStreamingRunSuccess(run, target.providerId, res))) {
         return;
       }
       const providerDurationMs =
@@ -207,6 +234,7 @@ export async function handleCreateResponse(req: Request, res: Response): Promise
         created,
         model: prepared.model,
         text: fullText,
+        toolCalls,
         promptChars: prepared.promptChars,
         textStarted: true,
         textOutputIndex: 0,
@@ -230,6 +258,7 @@ export async function handleCreateResponse(req: Request, res: Response): Promise
             created,
             model: prepared.model,
             text: fullText,
+            toolCalls,
             promptChars: prepared.promptChars,
           }),
         });
@@ -237,11 +266,11 @@ export async function handleCreateResponse(req: Request, res: Response): Promise
       return;
     }
 
-    const fullText = await collectRunText(run, res, cancellation.signal);
+    const runOutput = await collectRunOutput(run, res, cancellation.signal);
     const providerDurationMs =
       Math.round((performance.now() - providerStart) * 100) / 100;
 
-    if (fullText === null) {
+    if (runOutput === null) {
       if (cancellation.signal.aborted) return;
       getLogger().warn(
         {
@@ -271,7 +300,8 @@ export async function handleCreateResponse(req: Request, res: Response): Promise
       id,
       created,
       model: prepared.model,
-      text: fullText,
+      text: runOutput.text,
+      toolCalls: runOutput.toolCalls,
       promptChars: prepared.promptChars,
     });
 

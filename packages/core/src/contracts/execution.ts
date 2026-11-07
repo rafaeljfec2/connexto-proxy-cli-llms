@@ -6,6 +6,22 @@ export interface AgentImageInput {
   readonly data: string;
 }
 
+export type CursorExecutionMode = "edge_owned" | "local_runtime";
+
+export interface CursorClientToolSpec {
+  name: string;
+  description?: string;
+  parameters?: unknown;
+}
+
+/** Cursor-only execution hints set by the HTTP layer for hub-integrated clients. */
+export interface CursorExecutionContext {
+  mode: CursorExecutionMode;
+  promptMode: "agent" | "ask";
+  clientTools?: readonly CursorClientToolSpec[];
+  requiresLocalTool?: boolean;
+}
+
 export interface AgentExecutionInput {
   credential: ProviderCredential;
   model: string;
@@ -17,6 +33,7 @@ export interface AgentExecutionInput {
    */
   images?: readonly AgentImageInput[];
   workingDirectory?: string;
+  cursor?: CursorExecutionContext;
   signal?: AbortSignal;
 }
 
@@ -68,6 +85,8 @@ export interface AgentToolCallEvent {
   runId: string;
   toolName: string;
   callId: string;
+  /** JSON-encoded tool arguments when provided by the upstream runtime. */
+  arguments?: string;
 }
 
 export interface AgentToolResultEvent {

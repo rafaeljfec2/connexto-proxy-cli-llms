@@ -10,7 +10,13 @@ import type {
 } from "@agent-runtime-gateway/core";
 import type { Run, SDKAgent } from "@cursor/sdk";
 import { CursorClient } from "./client.js";
-import { defaultCursorDeps, defaultCursorEnv, verifyCursorApiKey } from "./cursor.js";
+import {
+  createCursorCompletion,
+  defaultCursorDeps,
+  defaultCursorEnv,
+  streamCursorText,
+  verifyCursorApiKey,
+} from "./cursor.js";
 import type { CursorMe } from "@agent-runtime-gateway/compatibility-openai";
 import { resolveCursorApiKey } from "./credential.js";
 import { normalizeCursorError } from "./errors.js";
@@ -28,8 +34,19 @@ import {
   type CursorSessionManagerOptions,
   type CursorSessionRecord,
 } from "./sessions.js";
+import { agentRunFromCursorTextStream } from "./edge-run.js";
+import { createCursorSdkCompletion } from "./cursor-sdk.js";
+import type { ClientToolSpec } from "./sdk/types.js";
+import { ConfigurationError } from "@cursor/sdk";
+import { HttpError } from "@agent-runtime-gateway/compatibility-openai";
 
 function throwNormalized(error: unknown): never {
+  if (error instanceof HttpError) {
+    throw error;
+  }
+  if (error instanceof ConfigurationError) {
+    throw error;
+  }
   const normalized = normalizeCursorError(error);
   throw new CursorProviderError(normalized.message, normalized.code, {
     retryable: normalized.retryable,
@@ -118,6 +135,9 @@ export class CursorProvider implements AgentProvider {
   async execute(input: AgentExecutionInput): Promise<AgentRun> {
     input.signal?.throwIfAborted();
     const apiKey = resolveCursorApiKey(input.credential);
+    if (input.cursor?.mode === "edge_owned") {
+      return this.executeEdgeOwned(input, apiKey);
+    }
     const workingDirectory = input.workingDirectory ?? this.defaultWorkingDirectory;
 
     this.executionGuard?.onExecutionStart?.({ sessionId: input.sessionId });
@@ -158,6 +178,69 @@ export class CursorProvider implements AgentProvider {
         this.executionGuard?.onExecutionEnd?.({ sessionId: input.sessionId });
       },
     );
+  }
+
+  private async executeEdgeOwned(
+    input: AgentExecutionInput,
+    apiKey: string,
+  ): Promise<AgentRun> {
+    const env = defaultCursorEnv();
+    const deps = defaultCursorDeps;
+    const cursorContext = input.cursor;
+    const promptMode = cursorContext?.promptMode ?? "ask";
+    const clientTools = (cursorContext?.clientTools ?? []) as ClientToolSpec[];
+    const useSdkPath =
+      promptMode === "agent" ||
+      clientTools.length > 0 ||
+      cursorContext?.requiresLocalTool === true;
+
+    this.executionGuard?.onExecutionStart?.({ sessionId: input.sessionId });
+
+    try {
+      if (useSdkPath) {
+        const completion = await createCursorSdkCompletion(env, deps, apiKey, {
+          prompt: { text: input.message },
+          model: { id: input.model },
+          sessionKey: input.sessionId,
+          workingDirectory: input.workingDirectory,
+          clientTools: clientTools.length ? clientTools : undefined,
+          requiresLocalTool: cursorContext?.requiresLocalTool === true,
+        });
+
+        const run = agentRunFromCursorTextStream({
+          providerId: this.id,
+          sessionId: input.sessionId,
+          model: input.model,
+          runId: completion.runId,
+          stream: completion.stream,
+          signal: input.signal,
+        });
+        return guardAgentRun(run, () => {
+          this.executionGuard?.onExecutionEnd?.({ sessionId: input.sessionId });
+        });
+      }
+
+      const completion = await createCursorCompletion(env, deps, apiKey, {
+        prompt: { text: input.message, mode: promptMode },
+        model: { id: input.model },
+        conversationKey: input.sessionId,
+      });
+
+      const run = agentRunFromCursorTextStream({
+        providerId: this.id,
+        sessionId: input.sessionId,
+        model: input.model,
+        runId: completion.requestId,
+        stream: streamCursorText(completion.stream),
+        signal: input.signal,
+      });
+      return guardAgentRun(run, () => {
+        this.executionGuard?.onExecutionEnd?.({ sessionId: input.sessionId });
+      });
+    } catch (error) {
+      this.executionGuard?.onExecutionEnd?.({ sessionId: input.sessionId });
+      throwNormalized(error);
+    }
   }
 }
 

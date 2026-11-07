@@ -3,6 +3,7 @@ import {
   HttpError,
   openAiErrorPayload,
 } from "@agent-runtime-gateway/compatibility-openai";
+import { ConfigurationError } from "@cursor/sdk";
 import { ProviderExecutionError } from "@agent-runtime-gateway/core";
 import { CursorProviderError } from "@agent-runtime-gateway/provider-cursor";
 import { getLogger } from "./logger.js";
@@ -83,9 +84,15 @@ export function createErrorHandler(): ErrorRequestHandler {
   };
 }
 
+const CURSOR_CONFIG_ERROR_CODES = new Set([
+  "cursor_missing_backend_url",
+  "cursor_missing_endpoint",
+  "cursor_configuration_error",
+]);
+
 export function sendHttpError(error: unknown, req: Request, res: Response): void {
   const publicError = classifyPublicError(error);
-  writePublicError(publicError, res, req.aborted);
+  writePublicError(publicError, res, req.aborted, error);
 }
 
 export function sendUpstreamFailure(res: Response): void {
@@ -93,8 +100,24 @@ export function sendUpstreamFailure(res: Response): void {
 }
 
 function classifyPublicError(error: unknown): PublicHttpError {
+  if (error instanceof ProviderExecutionError) {
+    if (error.cause !== undefined) {
+      return classifyPublicError(error.cause);
+    }
+    return { ...INTERNAL_ERROR, type: "ProviderExecutionError" };
+  }
+
   const parserError = classifyParserError(error);
   if (parserError) return parserError;
+
+  if (error instanceof ConfigurationError) {
+    return {
+      status: 500,
+      message: sanitizePublicMessage(error.message),
+      code: "cursor_configuration_error",
+      type: "ConfigurationError",
+    };
+  }
 
   if (error instanceof HttpError) {
     if (!isHttpStatus(error.status)) return INTERNAL_ERROR;
@@ -128,9 +151,14 @@ function classifyPublicError(error: unknown): PublicHttpError {
       providerCode: cursorError.code,
     };
   }
-
-  if (error instanceof ProviderExecutionError) {
-    return { ...INTERNAL_ERROR, type: "ProviderExecutionError" };
+  if (cursorError?.code === "cursor_configuration_error") {
+    return {
+      status: 500,
+      message: sanitizePublicMessage(cursorError.message),
+      code: "cursor_configuration_error",
+      type: "CursorProviderError",
+      providerCode: cursorError.code,
+    };
   }
 
   return INTERNAL_ERROR;
@@ -168,6 +196,7 @@ function writePublicError(
   publicError: PublicHttpError,
   res: Response,
   requestAborted: boolean,
+  sourceError?: unknown,
 ): void {
   const requestId =
     typeof res.locals.requestId === "string" ? res.locals.requestId : undefined;
@@ -179,10 +208,15 @@ function writePublicError(
     ...(publicError.providerCode ? { providerCode: publicError.providerCode } : {}),
   };
 
+  const logger = getLogger();
   if (publicError.status >= 500) {
-    getLogger().error(logFields, "request processing error");
+    logger.error(logFields, "request processing error");
+    const causeMessage = debugCauseMessage(sourceError);
+    if (causeMessage !== undefined) {
+      logger.debug({ ...logFields, causeMessage }, "request processing error cause");
+    }
   } else if (publicError.status === 429) {
-    getLogger().warn(logFields, "request failed");
+    logger.warn(logFields, "request failed");
   }
 
   if (res.headersSent || requestAborted) {
@@ -220,4 +254,36 @@ function isPublicCode(code: string): boolean {
 
 function isPublicParam(param: string | undefined): param is string {
   return param !== undefined && /^[a-zA-Z][a-zA-Z0-9_.-]{0,63}$/u.test(param);
+}
+
+function debugCauseMessage(error: unknown): string | undefined {
+  if (error === undefined) return undefined;
+  const visited = new Set<unknown>();
+  let current: unknown = error;
+
+  for (let depth = 0; depth < 6; depth += 1) {
+    if (current instanceof HttpError && CURSOR_CONFIG_ERROR_CODES.has(current.code)) {
+      return current.message;
+    }
+    if (current instanceof CursorProviderError) {
+      if (CURSOR_CONFIG_ERROR_CODES.has(current.code)) {
+        return current.message;
+      }
+      const cause = current.cause;
+      if (cause !== undefined && !visited.has(cause)) {
+        visited.add(cause);
+        current = cause;
+        continue;
+      }
+    }
+    if (current instanceof Error && current.cause !== undefined) {
+      if (!visited.has(current.cause)) {
+        visited.add(current.cause);
+        current = current.cause;
+        continue;
+      }
+    }
+    break;
+  }
+  return undefined;
 }

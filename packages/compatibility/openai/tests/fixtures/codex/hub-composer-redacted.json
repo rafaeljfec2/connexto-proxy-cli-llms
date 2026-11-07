@@ -1,0 +1,17 @@
+{
+  "model": "composer-2.5",
+  "instructions": [
+    "Environment:",
+    "  Working directory: /home/rafael/dev-francys/ativeplus",
+    "  Workspace root folder: /home/rafael/dev-francys/ativeplus"
+  ],
+  "input": [
+    {
+      "type": "message",
+      "role": "user",
+      "content": [{ "type": "input_text", "text": "describe this repository" }]
+    }
+  ],
+  "tools": [{ "type": "function", "name": "noop", "parameters": { "type": "object" } }],
+  "stream": false
+}

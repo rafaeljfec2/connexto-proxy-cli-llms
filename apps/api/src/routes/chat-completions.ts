@@ -1,4 +1,8 @@
-import { collectRunText, confirmStreamingRunSuccess } from "../utils/run.js";
+import {
+  collectRunOutput,
+  confirmStreamingRunSuccess,
+} from "../utils/run.js";
+import { openAiToolCallFromAgentEvent } from "../utils/agent-run-collect.js";
 import crypto from "node:crypto";
 import { performance } from "node:perf_hooks";
 import type { Express, Request, Response } from "express";
@@ -34,6 +38,8 @@ import {
   providerRequiresLocalWorkspace,
   resolveExecutionWorkingDirectory,
 } from "../utils/execution-working-directory.js";
+import { resolveCursorExecutionModeForRequest } from "../utils/cursor-execution-mode.js";
+import { buildCursorExecutionContext } from "../utils/cursor-execution-payload.js";
 
 export function registerChatCompletionRoutes(app: Express): void {
   app.post(
@@ -99,6 +105,10 @@ export function registerChatCompletionRoutes(app: Express): void {
         const sessionAffinity = resolveSessionAffinity(req, id, principal);
 
         const hubIntegrated = isHubIntegratedRequest(req);
+        const cursorExecutionMode =
+          target.providerId === "cursor"
+            ? resolveCursorExecutionModeForRequest(req)
+            : undefined;
         const workingDirectory = resolveExecutionWorkingDirectory({
           hubIntegrated,
           configuredDefault: getConfiguredDefaultWorkingDirectory(),
@@ -107,7 +117,8 @@ export function registerChatCompletionRoutes(app: Express): void {
         if (
           hubIntegrated &&
           providerRequiresLocalWorkspace(target.providerId) &&
-          workingDirectory === undefined
+          workingDirectory === undefined &&
+          cursorExecutionMode === "local_runtime"
         ) {
           res.status(422).json(
             openAiErrorPayload(
@@ -128,6 +139,9 @@ export function registerChatCompletionRoutes(app: Express): void {
           credential,
           signal: cancellation.signal,
           ...(workingDirectory !== undefined ? { workingDirectory } : {}),
+          ...(target.providerId === "cursor"
+            ? { cursor: buildCursorExecutionContext(req, prepared) }
+            : {}),
           ...executionImagesInput(images),
         });
 
@@ -141,6 +155,8 @@ export function registerChatCompletionRoutes(app: Express): void {
 
           let fullText = "";
           let firstDeltaMs: number | undefined;
+          let toolCallIndex = 0;
+          let streamFailed = false;
 
           for await (const event of run.events) {
             if (cancellation.signal.aborted) break;
@@ -153,11 +169,25 @@ export function registerChatCompletionRoutes(app: Express): void {
               res.write(
                 chatChunk({ id, created, model: prepared.model, delta: event.delta }),
               );
+            } else if (event.type === "tool.call") {
+              const toolCall = openAiToolCallFromAgentEvent(event);
+              res.write(
+                chatChunk({
+                  id,
+                  created,
+                  model: prepared.model,
+                  toolCall: { index: toolCallIndex, value: toolCall },
+                }),
+              );
+              toolCallIndex += 1;
+            } else if (event.type === "run.failed") {
+              streamFailed = true;
+              break;
             }
           }
 
           if (cancellation.signal.aborted) return;
-          if (!(await confirmStreamingRunSuccess(run, target.providerId, res))) {
+          if (streamFailed || !(await confirmStreamingRunSuccess(run, target.providerId, res))) {
             return;
           }
           const providerDurationMs =
@@ -181,7 +211,7 @@ export function registerChatCompletionRoutes(app: Express): void {
               created,
               model: prepared.model,
               finish: true,
-              finishReason: "stop",
+              finishReason: toolCallIndex > 0 ? "tool_calls" : "stop",
             }),
           );
 
@@ -202,11 +232,11 @@ export function registerChatCompletionRoutes(app: Express): void {
           return;
         }
 
-        const fullText = await collectRunText(run, res, cancellation.signal);
+        const runOutput = await collectRunOutput(run, res, cancellation.signal);
         const providerDurationMs =
           Math.round((performance.now() - providerStart) * 100) / 100;
 
-        if (fullText === null) {
+        if (runOutput === null) {
           if (cancellation.signal.aborted) return;
           getLogger().warn(
             {
@@ -236,7 +266,8 @@ export function registerChatCompletionRoutes(app: Express): void {
           id,
           created,
           model: prepared.model,
-          text: fullText,
+          text: runOutput.text,
+          toolCalls: runOutput.toolCalls,
           promptChars: prepared.promptChars,
           ...(target.providerId === "cursor"
             ? { metadata: { cursor_run_id: run.id } }

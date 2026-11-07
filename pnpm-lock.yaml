@@ -149,6 +149,10 @@ importers:
       '@cursor/sdk':
         specifier: ^1.0.26
         version: 1.3.0(zod@4.6.7)
+    devDependencies:
+      '@types/node':
+        specifier: ^24.19.2
+        version: 24.19.2
 
   packages/providers/cursor-usage:
     dependencies:

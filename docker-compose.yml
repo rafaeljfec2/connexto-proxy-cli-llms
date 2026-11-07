@@ -33,7 +33,10 @@ services:
       ANTIGRAVITY_STORAGE_PATH: ${ANTIGRAVITY_STORAGE_PATH:-/app}
       PATH: /app/.gemini/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
     volumes:
-      # Dev default mounts one repo. For Codex multi-repo via AI Hub, mount a parent dir (e.g. ~/dev-rafael:/projects:rw) and let the agent supply paths in the payload.
+      # Dev default: one repo at /workspace (direct clients + CURSOR_DEFAULT_WORKING_DIRECTORY).
+      # AI Hub + Codex resolve workspace only from the request payload (absolute host paths in <cwd>/<root>).
+      # Those paths must exist inside the container: bind the host tree at the SAME absolute paths
+      # (e.g. /home/rafael:/home/rafael:rw), not only as /workspace or /projects. Or run `pnpm dev` on the host.
       - ${CURSOR_WORKSPACE_HOST_PATH:-../connexto-aihub}:/workspace:rw
       - proxy-sessions:/var/lib/connexto-proxy/sessions:rw
       # Provider host authentication mount points (preserves Google / Antigravity OAuth tokens and CLI settings across recreations)

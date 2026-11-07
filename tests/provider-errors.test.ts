@@ -7,6 +7,7 @@ import {
   getLogger,
   setLogger,
 } from "@agent-runtime-gateway/api";
+import { HttpError } from "@agent-runtime-gateway/compatibility-openai";
 import { CursorProviderError } from "@agent-runtime-gateway/provider-cursor";
 import { getGatewayServices } from "../apps/api/src/services/gateway.js";
 import { createStubProvider } from "../packages/core/tests/helpers/stub-provider.js";
@@ -146,6 +147,21 @@ describe("Provider HTTP errors", () => {
     expect(response.status).toBe(429);
     expect(response.body.error.type).toBe("rate_limit_error");
     expect(response.text).not.toContain("UPSTREAM_TOKEN_73f1");
+  });
+
+  it("preserves cursor_missing_backend_url from HttpError instead of internal_error", async () => {
+    installFailingProvider(
+      new HttpError("Cursor backend URL is not configured", 500, "cursor_missing_backend_url"),
+    );
+    const response = await request(app)
+      .post("/v1/chat/completions")
+      .set("Authorization", "Bearer synthetic-cursor-key")
+      .send({ model: "composer-2.5", messages: [{ role: "user", content: "Hi" }] });
+
+    expect(response.status).toBe(500);
+    expect(response.body.error.code).toBe("cursor_missing_backend_url");
+    expect(response.body.error.message).toContain("not configured");
+    expect(response.body.error.type).not.toBe("internal_error");
   });
 
   it("maps Cursor credential failures to upstream errors, not gateway authorization errors", async () => {

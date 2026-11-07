@@ -1,45 +1,52 @@
 import type { Response } from "express";
 import type { AgentRun } from "@agent-runtime-gateway/core";
 import { sendUpstreamFailure } from "./error-handler.js";
+import { drainAgentRunEvents, type AgentRunOutput } from "./agent-run-collect.js";
 
+export type { AgentRunOutput } from "./agent-run-collect.js";
+
+export async function collectRunOutput(
+  run: AgentRun,
+  res?: Response,
+  signal?: AbortSignal,
+): Promise<AgentRunOutput | null> {
+  const output = await drainAgentRunEvents(run, { signal });
+
+  if (signal?.aborted) return null;
+  const result = await run.wait();
+  if (signal?.aborted) return null;
+
+  if (output.sawFailure || result.status === "failed") {
+    if (res) sendUpstreamFailure(res);
+    return null;
+  }
+  if (result.status === "cancelled") {
+    if (res) sendUpstreamFailure(res);
+    return null;
+  }
+
+  if (!output.text && output.toolCalls.length === 0) {
+    output.text = result.output?.text ?? "";
+  }
+
+  return output;
+}
+
+/** @deprecated Prefer {@link collectRunOutput} when tool calls matter. */
 export async function collectRunText(
   run: AgentRun,
   res?: Response,
   signal?: AbortSignal,
 ): Promise<string | null> {
-  let fullText = "";
-  for await (const event of run.events) {
-    if (signal?.aborted) return null;
-    if (event.type === "message.delta" && event.delta) {
-      fullText += event.delta;
-    }
-  }
-
-  if (signal?.aborted) return null;
-  const result = await run.wait();
-  if (signal?.aborted) return null;
-  if (result.status === "cancelled") {
-    if (res) sendUpstreamFailure(res);
-    return null;
-  }
-  if (result.status === "failed") {
-    if (res) {
-      sendUpstreamFailure(res);
-    }
-    return null;
-  }
-
-  return fullText;
+  const output = await collectRunOutput(run, res, signal);
+  return output?.text ?? null;
 }
 
 export async function confirmStreamingRunSuccess(
   run: AgentRun,
-  providerId: string,
+  _providerId: string,
   res: Response,
 ): Promise<boolean> {
-  if (providerId !== "antigravity") {
-    return true;
-  }
   const result = await run.wait();
   if (result.status === "completed") {
     return true;

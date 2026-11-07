@@ -51,18 +51,31 @@ Compose loads `.env` when present. Set `PORT` to change the published host port.
 
 ### Workspace mount (Composer / Codex)
 
-Local Cursor agents need a project tree on disk. The default Compose file mounts a host directory into the container and points the agent there:
+Local Cursor agents need a project tree on disk.
 
 | Compose setting                    | Default                            | Container path          |
 | ---------------------------------- | ---------------------------------- | ----------------------- |
 | `CURSOR_WORKSPACE_HOST_PATH`       | `../connexto-aihub` (sibling repo) | mounted at `/workspace` |
 | `CURSOR_DEFAULT_WORKING_DIRECTORY` | `/workspace`                       | Cursor SDK `local.cwd`  |
 
+**Direct proxy clients** (no `X-Gateway-API-Key`) may use `CURSOR_DEFAULT_WORKING_DIRECTORY` when the payload does not declare a workspace. Mount the repo under `/workspace` (or set both the mount and `CURSOR_DEFAULT_WORKING_DIRECTORY` to match).
+
+**AI Hub + Codex** send the IDE workspace in `instructions` / `input_text` (plain labels or Codex `<cwd>` / `<workspace_roots><root>` XML). The gateway resolves `local.cwd` from that payload only — it does not fall back to `CURSOR_DEFAULT_WORKING_DIRECTORY`. Parsed paths are **absolute on the host** (for example `/home/you/project`). Inside Docker those paths must exist at the **same absolute path**, not only under a renamed mount such as `/workspace` or `/projects`. Typical fix:
+
+```yaml
+volumes:
+  - /home/rafael:/home/rafael:rw
+```
+
+Adjust the host prefix to your layout and keep `user: 1000:1000` (or `CURSOR_CONTAINER_USER`) so writes succeed.
+
+**Alternative:** run `pnpm dev` on the host instead of Docker; host paths from Codex already exist locally.
+
 Override `CURSOR_WORKSPACE_HOST_PATH` in `.env` when your checkout layout differs. The default Compose file sets `user: 1000:1000` so the bind-mounted workspace remains writable from the container (adjust with `CURSOR_CONTAINER_USER` if your host uid differs). The application tree under `/app` remains world-readable (`755`) so a non-`gateway` uid can still start Node.
 
 The runtime image installs **`git`** (agent tools) and bootstraps **`@vscode/ripgrep`** on `PATH` at startup.
 
-For agent runs that need a host project tree, mount your workspace and set `CURSOR_DEFAULT_WORKING_DIRECTORY` — default `cwd` without these settings is `/app/apps/api` inside the container.
+Without workspace mounts or payload paths, default `cwd` inside the container is `/app/apps/api`.
 
 ### Session & Authentication Persistence
 

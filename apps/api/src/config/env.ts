@@ -75,6 +75,9 @@ const envSchema = z
         const trimmed = value?.trim();
         return trimmed ? trimmed : undefined;
       }),
+    CURSOR_EXECUTION_MODE: z
+      .enum(["auto", "edge", "local"])
+      .default("auto"),
     ANTIGRAVITY_STORAGE_PATH: z
       .string()
       .optional()

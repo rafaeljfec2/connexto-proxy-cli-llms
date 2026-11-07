@@ -28,7 +28,8 @@ Validated by `loadEnv()`:
 | `LOG_HTTP_PAYLOADS`                | `true`                             | Log inbound/outbound HTTP JSON bodies (`http payload` events). Set `false` to disable.                                                                                                                                                               |
 | `LOG_HTTP_PAYLOAD_MAX_BYTES`       | `262144`                           | Truncate logged bodies larger than this many UTF-8 bytes.                                                                                                                                                                                            |
 | `GATEWAY_JSON_BODY_LIMIT_BYTES`    | `33554432`                         | Maximum JSON request body size accepted by `express.json()` (32 MiB). Codex/Composer clients with large tool schemas need this headroom; lower only if you intentionally cap ingress.                                                                |
-| `CURSOR_DEFAULT_WORKING_DIRECTORY` | unset                              | Fallback `local.cwd` for **direct** local clients only (no `X-Gateway-API-Key`). AI Hub + Codex must send IDE workspace in `instructions` / messages; integrated requests without a resolvable agent path return **422**. Docker default `/workspace` is for proxy development, not as a silent multi-repo substitute. Startup fails if the path is configured but missing.                                    |
+| `CURSOR_DEFAULT_WORKING_DIRECTORY` | unset                              | Fallback `local.cwd` for **direct** local clients only (no `X-Gateway-API-Key`). Used when `CURSOR_EXECUTION_MODE=local` or hub requests force `local_runtime`. Hub + Codex under default `auto` use **edge_owned** remote inference and do not require this mount for repo identity. Startup fails if the path is configured but missing.                                                                                                                                                                                                                                                      |
+| `CURSOR_EXECUTION_MODE`            | `auto`                             | `auto` — hub requests (`X-Gateway-API-Key`) use **edge_owned** (remote Composer/SDK, no proxy `Agent.create` loop); direct clients use **local_runtime**. `edge` / `local` force the mode. With `local` + hub integration, workspace must be present in the payload or the server returns **422** (BUG-002).                                                                                                                                                                                          |
 | `RESPONSE_TTL_MS`                  | `3600000`                          | TTL for terminal stored Responses (1 hour). In-flight Responses are pinned until the HTTP handler finishes.                                                                                                                                          |
 | `RESPONSE_MAX_ENTRIES`             | `512`                              | Maximum stored Responses kept in memory. Active pins and running handlers are never evicted.                                                                                                                                                         |
 | `SESSION_TTL_MS`                   | `86400000`                         | TTL for inactive Cursor and Antigravity session affinity records (24 hours). Sessions referenced by active executions are skipped.                                                                                                                   |
@@ -75,7 +76,23 @@ Startup fails when `HOST` is not a loopback address and `GATEWAY_API_TOKEN` is e
 | ---------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
 | `CURSOR_API_KEY` | For real runs | Cursor API key used as **fallback** when a request does not send Bearer / `x-api-key`. Also used by some provider integration tests. |
 
-**Never commit** this value. `.env` is gitignored.
+### Edge-owned Composer backend (AI Hub / Codex)
+
+When `CURSOR_EXECUTION_MODE` is `auto` (default) or `edge`, requests with `X-Gateway-API-Key` use **edge_owned** remote inference (ported from [standardagents/composer-api](https://github.com/standardagents/composer-api)). Agent mode, client tools, or MCP-heavy Codex payloads use the SDK connect path and need the same backend secrets as the Composer worker:
+
+| Variable                       | Required for edge_owned | Description                                                                 |
+| ------------------------------ | ----------------------- | --------------------------------------------------------------------------- |
+| `CURSOR_BACKEND_BASE_URL`      | Yes\*                   | Base URL for internal Cursor backend calls (for example `/auth/exchange_user_api_key`). |
+| `CURSOR_LOCAL_AGENT_ENDPOINT`  | Yes\*                   | Path for the local-agent SDK connect/stream harness (tool/agent mode).      |
+| `CURSOR_CHAT_ENDPOINT`         | Yes\*                   | Path for legacy chat transport (`createCursorCompletion`, ask mode without SDK path). |
+| `CURSOR_SDK_BRIDGE_URL`        | Alternative             | When set (with optional `CURSOR_SDK_BRIDGE_TOKEN`), routes the SDK harness to an external bridge instead of the trio above. |
+| `ENCRYPTION_KEY`               | With bridge / D1        | Matches composer-api encryption for persisted SDK session keys when using a bridge. |
+
+\*Not required when `CURSOR_EXECUTION_MODE=local` or when a valid `CURSOR_SDK_BRIDGE_URL` is configured.
+
+If these are missing, the API returns an OpenAI-style error with codes such as `cursor_missing_backend_url` or `cursor_missing_endpoint` instead of a generic `internal_error`. At startup, the server logs `cursor_edge_owned_env_incomplete` when any of the three backend variables are unset and no SDK bridge URL is configured (unless mode is `local`).
+
+**Never commit** secrets. `.env` is gitignored.
 
 ## Gateway authentication
 

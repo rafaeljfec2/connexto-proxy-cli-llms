@@ -1,5 +1,6 @@
 import {
   AuthenticationError,
+  ConfigurationError,
   CursorAgentError,
   CursorSdkError,
   RateLimitError,
@@ -13,6 +14,15 @@ export interface NormalizedCursorError {
 }
 
 export function normalizeCursorError(error: unknown): NormalizedCursorError {
+  if (error instanceof ConfigurationError) {
+    return {
+      message: error.message,
+      code: "cursor_configuration_error",
+      retryable: false,
+      cause: error,
+    };
+  }
+
   if (error instanceof AuthenticationError) {
     return {
       message: error.message,

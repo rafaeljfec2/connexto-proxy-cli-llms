@@ -6,6 +6,9 @@ export type {
   AgentResult,
   AgentRun,
   AgentRunStatus,
+  CursorClientToolSpec,
+  CursorExecutionContext,
+  CursorExecutionMode,
 } from "./contracts/execution.js";
 export type { Model, ProviderCredential } from "./contracts/model.js";
 export type {

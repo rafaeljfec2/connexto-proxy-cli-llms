@@ -15,6 +15,7 @@ import { getLogger } from "../utils/logger.js";
 import { sendHttpError } from "../utils/error-handler.js";
 import { createRequestCancellation } from "../utils/request-cancellation.js";
 import { providerCredential, resolveProviderTarget } from "../utils/provider-target.js";
+import { resolveCursorExecutionModeForRequest } from "../utils/cursor-execution-mode.js";
 
 export function registerCompletionRoutes(app: Express): void {
   app.post("/v1/completions", async (req: Request, res: Response): Promise<void> => {
@@ -62,12 +63,26 @@ export function registerCompletionRoutes(app: Express): void {
 
       const services = getGatewayServices();
       const providerStart = performance.now();
+      const cursorMode =
+        target.providerId === "cursor"
+          ? resolveCursorExecutionModeForRequest(req)
+          : undefined;
+
       const run = await services.executor.execute(target.providerId, {
         sessionId: id,
         model: target.modelId,
         message: promptText,
         credential: providerCredential(target, apiKey),
         signal: cancellation.signal,
+        ...(target.providerId === "cursor" && cursorMode !== undefined
+          ? {
+              cursor: {
+                mode: cursorMode,
+                promptMode: "ask" as const,
+                requiresLocalTool: false,
+              },
+            }
+          : {}),
       });
 
       if (cancellation.signal.aborted) return;

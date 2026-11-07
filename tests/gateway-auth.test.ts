@@ -215,9 +215,30 @@ describe("gateway authentication", () => {
     expect(providerExecute).toHaveBeenCalledTimes(1);
   });
 
-  it("rejects hub-integrated Cursor requests without agent workspace context", async () => {
+  it("allows hub-integrated edge_owned requests without resolvable host workspace", async () => {
     providerExecute.mockClear();
     const response = await request(createAuthenticatedApp())
+      .post("/v1/chat/completions")
+      .set("X-Gateway-API-Key", gatewayToken)
+      .set("Authorization", "Bearer synthetic-cursor-key")
+      .send({ messages: [{ role: "user", content: "hello" }] });
+
+    expect(response.status).toBe(200);
+    expect(providerExecute).toHaveBeenCalledTimes(1);
+    expect(providerExecute.mock.calls[0]?.[0]?.cursor?.mode).toBe("edge_owned");
+  });
+
+  it("rejects hub-integrated local_runtime requests without agent workspace context", async () => {
+    providerExecute.mockClear();
+    const app = buildApp(
+      loadEnv({
+        HOST: "127.0.0.1",
+        GATEWAY_API_TOKEN: gatewayToken,
+        CORS_ORIGINS: "http://localhost:5173",
+        CURSOR_EXECUTION_MODE: "local",
+      }),
+    );
+    const response = await request(app)
       .post("/v1/chat/completions")
       .set("X-Gateway-API-Key", gatewayToken)
       .set("Authorization", "Bearer synthetic-cursor-key")

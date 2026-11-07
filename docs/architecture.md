@@ -4,7 +4,7 @@
 
 Provide a **local HTTP gateway** that accepts OpenAI-compatible requests, resolves a provider from the model ID, runs agents through the selected provider, and returns normalized OpenAI-style responses (including SSE streams).
 
-**AI Hub + Codex (product direction):** The edge agent owns workspace and tools; the hub is opaque forward. Today, the Cursor provider still uses **local SDK agents** (`local.cwd`) for many Composer requests — see the phased remediation runbook [runbooks/edge-owned-execution-plan.md](runbooks/edge-owned-execution-plan.md). BUG-002 enforced agent-first cwd and fail-closed hub requests without workspace; **edge-owned execution** is the follow-up epic.
+**AI Hub + Codex (product direction):** The edge agent owns workspace and tools; the hub is opaque forward. Hub-integrated requests (`X-Gateway-API-Key`) default to **`edge_owned`** execution: remote Composer inference via the ported engine/SDK (`createCursorCompletion` / `createCursorSdkCompletion`) without a local `Agent.create` tool loop. Direct clients stay on **`local_runtime`** (`local.cwd`). See [runbooks/edge-owned-execution-plan.md](runbooks/edge-owned-execution-plan.md). Override with `CURSOR_EXECUTION_MODE=local|edge|auto`.
 
 ## Request flow
 
