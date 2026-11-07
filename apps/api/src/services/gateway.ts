@@ -65,8 +65,13 @@ export function createGatewayServices(
       | "CURSOR_DEFAULT_WORKING_DIRECTORY"
       | "ANTIGRAVITY_STORAGE_PATH"
       | "CHROMIUM_EXECUTABLE_PATH"
+      | "CURSOR_USAGE_AUTH_HEADLESS"
+      | "CURSOR_USAGE_AUTH_USER_DATA_DIR"
+      | "CURSOR_USAGE_AUTH_VIEWPORT_WIDTH"
+      | "CURSOR_USAGE_AUTH_VIEWPORT_HEIGHT"
       | "CURSOR_USAGE_LOGIN_URL"
       | "CURSOR_USAGE_DASHBOARD_URL"
+      | "CURSOR_USAGE_AUTHENTICATED_URL_PATTERN"
       | "CURSOR_USAGE_RESPONSE_URL_PATTERN"
       | "CURSOR_USAGE_INTERACTION_URL_BASE"
     >
@@ -142,6 +147,12 @@ export function createGatewayServices(
       ? new RegExp(usagePatternSource, "i")
       : undefined;
 
+  const authUrlPatternSource = env?.CURSOR_USAGE_AUTHENTICATED_URL_PATTERN?.trim();
+  const authenticatedUrlPattern =
+    authUrlPatternSource !== undefined && authUrlPatternSource.length > 0
+      ? new RegExp(authUrlPatternSource, "i")
+      : undefined;
+
   const cursorUsageService =
     options.cursorUsageService ??
     new CursorUsageService({
@@ -150,8 +161,13 @@ export function createGatewayServices(
         import("@agent-runtime-gateway/provider-cursor-usage").CursorUsageServiceOptions["store"]
       >,
       chromiumExecutablePath: env?.CHROMIUM_EXECUTABLE_PATH,
+      authHeadless: env?.CURSOR_USAGE_AUTH_HEADLESS,
+      authUserDataDirRoot: env?.CURSOR_USAGE_AUTH_USER_DATA_DIR,
+      authViewportWidth: env?.CURSOR_USAGE_AUTH_VIEWPORT_WIDTH,
+      authViewportHeight: env?.CURSOR_USAGE_AUTH_VIEWPORT_HEIGHT,
       loginUrl: env?.CURSOR_USAGE_LOGIN_URL,
       dashboardUrl: env?.CURSOR_USAGE_DASHBOARD_URL,
+      authenticatedUrlPattern,
       usageResponseUrlPattern,
       interactionUrlBase:
         env?.CURSOR_USAGE_INTERACTION_URL_BASE ??

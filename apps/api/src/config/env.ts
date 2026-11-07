@@ -88,8 +88,26 @@ const envSchema = z
         const trimmed = value?.trim();
         return trimmed ? trimmed : undefined;
       }),
+    CURSOR_USAGE_AUTH_HEADLESS: z
+      .union([z.boolean(), z.enum(["true", "false", "1", "0"])])
+      .optional()
+      .transform((value) => {
+        if (value === undefined) return true;
+        if (typeof value === "boolean") return value;
+        return value !== "false" && value !== "0";
+      }),
+    CURSOR_USAGE_AUTH_USER_DATA_DIR: z
+      .string()
+      .optional()
+      .transform((value) => {
+        const trimmed = value?.trim();
+        return trimmed ? trimmed : undefined;
+      }),
+    CURSOR_USAGE_AUTH_VIEWPORT_WIDTH: z.coerce.number().int().positive().default(1024),
+    CURSOR_USAGE_AUTH_VIEWPORT_HEIGHT: z.coerce.number().int().positive().default(768),
     CURSOR_USAGE_LOGIN_URL: z.string().trim().optional(),
     CURSOR_USAGE_DASHBOARD_URL: z.string().trim().optional(),
+    CURSOR_USAGE_AUTHENTICATED_URL_PATTERN: z.string().trim().optional(),
     CURSOR_USAGE_RESPONSE_URL_PATTERN: z.string().trim().optional(),
     CURSOR_USAGE_INTERACTION_URL_BASE: z
       .string()

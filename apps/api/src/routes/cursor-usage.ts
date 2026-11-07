@@ -145,7 +145,7 @@ export function registerCursorUsageRoutes(app: Express): void {
         res
           .status(200)
           .type("html")
-          .send(interactionPlaceholderHtml(sessionId));
+          .send(interactionPlaceholderHtml(sessionId, live.url));
       } catch (error) {
         next(error);
       }
@@ -153,14 +153,25 @@ export function registerCursorUsageRoutes(app: Express): void {
   );
 }
 
-function interactionPlaceholderHtml(sessionId: string): string {
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
+}
+
+function interactionPlaceholderHtml(sessionId: string, loginPageUrl: string): string {
+  const safeUrl = escapeHtml(loginPageUrl);
   return `<!DOCTYPE html>
 <html lang="en">
 <head><meta charset="utf-8"><title>Cursor authentication</title></head>
 <body>
-  <h1>Cursor login (session ${sessionId})</h1>
-  <p>Complete sign-in in the assisted browser session. In production, this route is served behind the AI Hub gateway with a secured remote display (noVNC).</p>
-  <p>Poll <code>GET /v1/providers/cursor/auth/${sessionId}</code> until status is <code>authenticated</code>.</p>
+  <h1>Cursor login (session ${escapeHtml(sessionId)})</h1>
+  <p><strong>Sign in in the Chromium window opened by the Connexto Proxy</strong> (not in this tab).
+  Set <code>CURSOR_USAGE_AUTH_HEADLESS=false</code> and restart the proxy if no window appears.</p>
+  <p>Current step in the assisted browser: <a href="${safeUrl}" rel="noopener noreferrer">${safeUrl}</a></p>
+  <p>The AI Hub polls auth status automatically. When login completes, this session becomes <code>authenticated</code>.</p>
 </body>
 </html>`;
 }

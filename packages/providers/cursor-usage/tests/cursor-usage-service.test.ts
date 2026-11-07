@@ -40,6 +40,34 @@ describe("CursorUsageService", () => {
     expect(result.status).toBe("available");
     expect(result.usage).toEqual({ used: 12, limit: 100 });
   });
+
+  it("marks auth complete when social login lands on cursor.com/agents", async () => {
+    const store = createNamespacedStore(
+      new InMemorySessionStore<CursorUsageSessionRecord>(),
+      CURSOR_USAGE_NAMESPACE,
+    );
+    const pool = createStubPool();
+    pool.openAuthSession = vi.fn(async () => ({}) as never);
+    pool.getLiveAuth = vi.fn(
+      () =>
+        ({
+          page: { url: () => "https://cursor.com/agents" },
+          context: {},
+        }) as never,
+    );
+    pool.captureStorageState = vi.fn(async () => ({
+      cookies: [{ name: "session", value: "x", domain: "cursor.com", path: "/", expires: -1, httpOnly: true, secure: true, sameSite: "Lax" as const }],
+      origins: [],
+    }));
+    pool.closeAuthSession = vi.fn(async () => undefined);
+
+    const service = new CursorUsageService({ store, browserPool: pool });
+    const started = await service.startAuth("acct-social");
+    const status = await service.getAuthStatus(started.sessionId);
+
+    expect(status.status).toBe("authenticated");
+    expect(pool.captureStorageState).toHaveBeenCalledWith(started.sessionId);
+  });
 });
 
 function createStubPool(options: { usageJson?: unknown } = {}): PlaywrightBrowserPool {

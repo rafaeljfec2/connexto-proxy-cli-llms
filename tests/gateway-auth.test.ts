@@ -56,6 +56,15 @@ describe("gateway authentication", () => {
     expect(secureTokenEquals("", "")).toBe(false);
   });
 
+  it("allows cursor auth interaction HTML without gateway key", async () => {
+    const app = createAuthenticatedApp();
+    const response = await request(app).get(
+      "/v1/providers/cursor/auth/00000000-0000-4000-8000-000000000001/interaction",
+    );
+    expect(response.status).not.toBe(401);
+    expect(response.status).toBe(404);
+  });
+
   it("keeps only the explicit metadata endpoints public", async () => {
     const app = createAuthenticatedApp();
     const responses = await Promise.all([

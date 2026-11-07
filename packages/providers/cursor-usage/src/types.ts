@@ -75,6 +75,10 @@ export interface CursorUsageServiceOptions {
   readonly usageResponseUrlPattern?: RegExp;
   readonly authenticatedUrlPattern?: RegExp;
   readonly chromiumExecutablePath?: string;
+  readonly authHeadless?: boolean;
+  readonly authUserDataDirRoot?: string;
+  readonly authViewportWidth?: number;
+  readonly authViewportHeight?: number;
   readonly interactionUrlBase?: string;
   readonly store?: import("@agent-runtime-gateway/core").NamespacedSessionStore<CursorUsageSessionRecord>;
   readonly browserPool?: import("./playwright-browser.js").PlaywrightBrowserPool;

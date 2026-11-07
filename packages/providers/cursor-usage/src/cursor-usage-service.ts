@@ -19,6 +19,9 @@ import type {
 const DEFAULT_LOGIN = "https://authenticator.cursor.sh/";
 const DEFAULT_DASHBOARD = "https://cursor.com/dashboard";
 const DEFAULT_USAGE_PATTERN = /usage/i;
+/** Post-OAuth landings include /agents (social) and /dashboard (usage UI). */
+const DEFAULT_AUTHENTICATED_URL_PATTERN =
+  /(^https?:\/\/)?([^/]+\.)?cursor\.com\/(dashboard|settings|agents)(\/?|$|\?)/i;
 
 export class CursorUsageService {
   private readonly sessionStore: CursorUsageSessionStore;
@@ -47,6 +50,10 @@ export class CursorUsageService {
       options.browserPool ??
       new PlaywrightBrowserPool({
         chromiumExecutablePath: options.chromiumExecutablePath,
+        authHeadless: options.authHeadless,
+        authUserDataDirRoot: options.authUserDataDirRoot,
+        authViewportWidth: options.authViewportWidth,
+        authViewportHeight: options.authViewportHeight,
       });
     this.authOperationTtlMs = options.authOperationTtlMs ?? 30 * 60_000;
     this.collectTimeoutMs = options.collectTimeoutMs ?? 60_000;
@@ -54,7 +61,7 @@ export class CursorUsageService {
     this.dashboardUrl = options.dashboardUrl ?? DEFAULT_DASHBOARD;
     this.usageUrlPattern = options.usageResponseUrlPattern ?? DEFAULT_USAGE_PATTERN;
     this.authenticatedUrlPattern =
-      options.authenticatedUrlPattern ?? /cursor\.com\/(dashboard|settings)/i;
+      options.authenticatedUrlPattern ?? DEFAULT_AUTHENTICATED_URL_PATTERN;
     this.interactionUrlBase = options.interactionUrlBase ?? "";
   }
 
@@ -134,7 +141,7 @@ export class CursorUsageService {
       const interactionUrl = `${this.interactionUrlBase}/v1/providers/cursor/auth/${sessionId}/interaction`;
 
       try {
-        await this.browserPool.openAuthSession(sessionId, this.loginUrl);
+        await this.browserPool.openAuthSession(sessionId, accountId, this.loginUrl);
       } catch (error) {
         if (error instanceof BrowserUnavailableError) {
           throw error;

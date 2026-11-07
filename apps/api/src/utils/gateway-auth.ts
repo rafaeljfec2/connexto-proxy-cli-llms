@@ -36,9 +36,7 @@ export function createGatewayAuthMiddleware(config: GatewayAuthConfig): RequestH
   return (req, res, next) => {
     const method = req.method === "HEAD" ? "GET" : req.method;
     const path = normalizePath(req.path);
-    const isPublicRead =
-      publicReadEndpoints.has(`${method} ${path}`) ||
-      (method === "GET" && /^\/v1\/models\/[^/]+$/.test(path));
+    const isPublicRead = isPublicGatewayReadRoute(method, path);
 
     if (req.method === "OPTIONS" || isPublicRead) return next();
 
@@ -65,4 +63,20 @@ export function createGatewayAuthMiddleware(config: GatewayAuthConfig): RequestH
 
 function normalizePath(path: string): string {
   return path.length > 1 && path.endsWith("/") ? path.slice(0, -1) : path;
+}
+
+function isPublicGatewayReadRoute(method: string, path: string): boolean {
+  if (publicReadEndpoints.has(`${method} ${path}`)) {
+    return true;
+  }
+  if (method === "GET" && /^\/v1\/models\/[^/]+$/.test(path)) {
+    return true;
+  }
+  // Browsers open interactionUrl in a new tab and cannot send X-Gateway-API-Key.
+  // The session UUID in the path is the capability token; the handler returns 404
+  // when the session is unknown or expired.
+  if (method === "GET" && /^\/v1\/providers\/cursor\/auth\/[^/]+\/interaction$/.test(path)) {
+    return true;
+  }
+  return false;
 }
