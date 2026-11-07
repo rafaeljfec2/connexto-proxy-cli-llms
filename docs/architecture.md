@@ -85,6 +85,6 @@ Native `POST /v1/agents/run` from the original gateway roadmap is **not** presen
 ## Target evolution
 
 - Add `POST /v1/agents/run` native contract alongside OpenAI compatibility.
-- Antigravity is registered in the same `ProviderRegistry`; images and OpenAI tool translation remain out of scope for the initial gateway integration.
+- Antigravity is registered in the same `ProviderRegistry`. PNG and JPEG images are normalized at the route boundary (`apps/api/src/utils/antigravity-images.ts`) and forwarded as ACP image blocks; URL fetching uses the SSRF-safe pinned transport in `packages/providers/antigravity/src/images/`. OpenAI tool translation remains out of scope.
 
 Implementation proceeds in vertical slices; see [development.md](development.md).

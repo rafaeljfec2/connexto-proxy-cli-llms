@@ -86,10 +86,13 @@ export function createNodePinnedTransport(
           reject(new Error(`Unsupported HTTP status ${status}.`));
           return;
         }
-        const body = NULL_BODY_STATUSES.has(status)
-          ? null
-          : (Readable.toWeb(incoming) as ReadableStream<Uint8Array>);
-        resolve(new Response(body, { status, headers: toHeaders(incoming.headers) }));
+        if (NULL_BODY_STATUSES.has(status)) {
+          incoming.resume();
+          resolve(new Response(null, { status, headers: toHeaders(incoming.headers) }));
+          return;
+        }
+        const web: ReadableStream<Uint8Array> = Readable.toWeb(incoming);
+        resolve(new Response(web, { status, headers: toHeaders(incoming.headers) }));
       });
       outbound.end();
     });

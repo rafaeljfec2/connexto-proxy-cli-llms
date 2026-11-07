@@ -97,16 +97,20 @@ async function assertSafeOutboundUrl(
 
   rejectLocalHostname(hostname);
   let records: Awaited<ReturnType<SafeLookupFn>> = [];
+  let lookupFailure: unknown;
   try {
     records = await raceAbort(lookup(hostname), signal);
   } catch (cause) {
     if (signal.aborted) {
       throw cause;
     }
+    lookupFailure = cause;
     records = [];
   }
   if (records.length === 0) {
-    throw error("Image URL host could not be resolved.");
+    throw Object.assign(error("Image URL host could not be resolved."), {
+      cause: lookupFailure,
+    });
   }
   for (const record of records) {
     if (

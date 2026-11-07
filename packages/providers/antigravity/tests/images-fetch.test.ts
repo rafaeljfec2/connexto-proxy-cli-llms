@@ -32,20 +32,6 @@ function pngResponse(): Promise<Response> {
   return Promise.resolve(new Response(PNG_BYTES, { status: 200 }));
 }
 
-function streamingResponse(chunks: Uint8Array[]): Response {
-  const stream = new ReadableStream<Uint8Array>({
-    pull(controller) {
-      const next = chunks.shift();
-      if (next === undefined) {
-        controller.close();
-        return;
-      }
-      controller.enqueue(next);
-    },
-  });
-  return new Response(stream, { status: 200 });
-}
-
 /** Spy fetch that serves a valid PNG and records every requested URL. */
 function spyFetch(): { fetchImpl: typeof fetch; calls: string[] } {
   const calls: string[] = [];
@@ -299,12 +285,22 @@ describe("safe image URL fetching", () => {
     ).rejects.toThrow(/byte limit/);
   });
 
-  it("enforces the byte limit while streaming", async () => {
-    const oversized = Buffer.concat([
-      Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
-      Buffer.alloc(MAX_ANTIGRAVITY_IMAGE_BYTES + 64, 0x42),
-    ]);
-    const fetchImpl = (() => streamingResponse([oversized])) as unknown as typeof fetch;
+  it("stops pulling the body shortly after the byte limit is exceeded", async () => {
+    const chunkBytes = 64 * 1024;
+    const totalChunks = 512;
+    let pulls = 0;
+    const body = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        pulls += 1;
+        if (pulls > totalChunks) {
+          controller.close();
+          return;
+        }
+        controller.enqueue(new Uint8Array(chunkBytes).fill(0x42));
+      },
+    });
+    const fetchImpl = (() =>
+      Promise.resolve(new Response(body, { status: 200 }))) as unknown as typeof fetch;
 
     await expect(
       resolveAgentImages([{ url: "https://example.com/a.png" }], {
@@ -312,6 +308,8 @@ describe("safe image URL fetching", () => {
         lookup: PUBLIC_DNS,
       }),
     ).rejects.toThrow(/byte limit/);
+    const limitChunks = Math.ceil(MAX_ANTIGRAVITY_IMAGE_BYTES / chunkBytes);
+    expect(pulls).toBeLessThanOrEqual(limitChunks + 4);
   });
 
   it("rejects when the fetch exceeds the configured timeout", async () => {

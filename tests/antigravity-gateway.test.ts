@@ -314,6 +314,7 @@ describe("Antigravity gateway routing", () => {
     expect(invalidBase64.status).toBe(400);
     expect(wrongMime.status).toBe(400);
     expect(protectedAddress.status).toBe(400);
+    expect(protectedAddress.body.error.message).toMatch(/forbidden address/);
     expect(executedInputs).toHaveLength(0);
   });
 

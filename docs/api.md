@@ -90,7 +90,7 @@ Provider selection uses the existing `model` field. Unprefixed Composer/Grok mod
 
 **Stream:** set `"stream": true` — response is `text/event-stream` with OpenAI-style chunks and `[DONE]`.
 
-The same provider selection applies to existing `POST /v1/completions`, `POST /v1/responses`, and `POST /v1/responses/compact` execution. The initial Antigravity integration is text-only; image blocks and OpenAI tool definitions for Antigravity models return `unsupported_parameter`. Cursor requests retain their existing behavior.
+The same provider selection applies to existing `POST /v1/completions`, `POST /v1/responses`, and `POST /v1/responses/compact` execution. For Antigravity models, PNG and JPEG images are accepted (up to 1 MiB decoded and 8 images per request); invalid or disallowed image input returns `invalid_request_error`. OpenAI tool definitions for Antigravity models return `unsupported_parameter`. Cursor requests retain their existing behavior.
 
 Successful JSON responses may include extension fields (e.g. `cursor_run_id`) in addition to standard OpenAI fields.
 

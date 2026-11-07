@@ -70,7 +70,7 @@ pnpm --filter @agent-runtime-gateway/provider-cursor test:integration
 
 ### Limitations
 
-- The initial gateway integration supports text prompts. Image blocks and OpenAI tool definitions are rejected for Antigravity model IDs; Cursor behavior is unchanged.
+- Antigravity model IDs accept PNG and JPEG images through `image_url` (base64 data URLs and HTTP(S) URLs) and `input_image` content, up to 1 MiB decoded per image and 8 images per request. URL images are fetched with SSRF protection: validated addresses are pinned to the connection, redirects are revalidated, and at most 3 redirect hops are followed. OpenAI tool definitions remain rejected for Antigravity model IDs; Cursor behavior is unchanged.
 - The gateway-to-ACP session mapping is in memory and does not survive an API process restart. ACP session history remains under the local `agy` CLI's control.
 - Models are a static catalog of the values verified against `agy` 1.5.1. Update the catalog when supported agent configuration values change.
 

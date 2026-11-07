@@ -97,15 +97,12 @@ export function isForbiddenInetAddress(address: string): string | undefined {
     // IPv4-mapped (::ffff:a.b.c.d) — embedded IPv4 decides alone.
     return forbiddenIpv4(groupsToDotted((groups[6] << 16) + groups[7]));
   }
-  if (
-    groups.slice(0, 6).every((group) => group === 0) &&
-    (groups[6] !== 0 || groups[7] !== 0)
-  ) {
-    // IPv4-compatible (::a.b.c.d).
-    return forbiddenIpv4(groupsToDotted((groups[6] << 16) + groups[7]));
-  }
   if (groups.slice(0, 7).every((group) => group === 0) && groups[7] === 1) {
     return "IPv6 loopback (::1)";
+  }
+  if (groups.slice(0, 6).every((group) => group === 0)) {
+    // IPv4-compatible (::a.b.c.d) is deprecated and blocked outright (fail closed).
+    return "IPv4-compatible IPv6 (::/96)";
   }
   if (
     groups.slice(0, 4).every((group) => group === 0) &&

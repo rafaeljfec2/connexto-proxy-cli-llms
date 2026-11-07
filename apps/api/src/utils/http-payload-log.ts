@@ -35,23 +35,93 @@ export function sanitizeRequestHeaders(
   return out;
 }
 
+const IMAGE_DATA_REDACTED = "[REDACTED:image-data]";
+/** Data URLs that carry base64 bytes or an image MIME type, with or without a subtype. */
+const DATA_URL_PATTERN = /^data:(?:[^,]*;\s*base64\s*,|image[^,]*,)/i;
+/** Base64 runs long enough to be image bytes, found inside image context. */
+const BASE64_RUN_PATTERN = /^[A-Za-z0-9+/=\s]{256,}$/;
+const IMAGE_URL_KEY = /^(url|image_url)$/i;
+const IMAGE_MIME_KEYS = ["mimeType", "mime_type", "media_type"] as const;
+
+/**
+ * Redacts sensitive JSON values. Image payloads are never logged: data URLs are
+ * replaced, base64 data inside an image context (an image part, or any value
+ * nested under one) is replaced, and image URLs keep only origin and path
+ * because query strings may carry signed credentials.
+ */
 export function redactSensitiveJson(value: unknown): unknown {
+  return redactValue(value, undefined, false);
+}
+
+function redactValue(
+  value: unknown,
+  key: string | undefined,
+  inImageContext: boolean,
+): unknown {
+  if (typeof value === "string") {
+    return redactString(value, key, inImageContext);
+  }
   if (value === null || typeof value !== "object") {
     return value;
   }
   if (Array.isArray(value)) {
-    return value.map((entry) => redactSensitiveJson(entry));
+    return value.map((entry) => redactValue(entry, undefined, inImageContext));
   }
   const record = value as Record<string, unknown>;
+  const childContext = inImageContext || isImageRecord(record);
   const out: Record<string, unknown> = {};
-  for (const [key, entry] of Object.entries(record)) {
-    if (SENSITIVE_JSON_KEY.test(key)) {
-      out[key] = REDACTED;
+  for (const [entryKey, entry] of Object.entries(record)) {
+    if (SENSITIVE_JSON_KEY.test(entryKey)) {
+      out[entryKey] = REDACTED;
     } else {
-      out[key] = redactSensitiveJson(entry);
+      out[entryKey] = redactValue(entry, entryKey, childContext);
     }
   }
   return out;
+}
+
+function isImageRecord(record: Record<string, unknown>): boolean {
+  const typeValue = record.type;
+  if (typeof typeValue === "string" && /image/i.test(typeValue)) {
+    return true;
+  }
+  return IMAGE_MIME_KEYS.some((mimeKey) => {
+    const mimeValue = record[mimeKey];
+    return typeof mimeValue === "string" && /^\s*image\//i.test(mimeValue);
+  });
+}
+
+function redactString(
+  value: string,
+  key: string | undefined,
+  inImageContext: boolean,
+): string {
+  if (DATA_URL_PATTERN.test(value)) {
+    return IMAGE_DATA_REDACTED;
+  }
+  if (inImageContext && (key === "data" || BASE64_RUN_PATTERN.test(value))) {
+    return IMAGE_DATA_REDACTED;
+  }
+  if (key !== undefined && IMAGE_URL_KEY.test(key) && /^https?:\/\//i.test(value)) {
+    return stripUrlQuery(value);
+  }
+  return value;
+}
+
+/** Redacts a raw, non-JSON text body (for example a data URL echoed as text). */
+export function redactRawText(text: string): string {
+  return redactString(text, undefined, false);
+}
+
+function stripUrlQuery(value: string): string {
+  try {
+    const url = new URL(value);
+    url.search = "";
+    url.hash = "";
+    return url.toString();
+  } catch {
+    return "[REDACTED:url]";
+  }
 }
 
 export function serializePayloadForLog(value: unknown, maxBytes: number): unknown {
@@ -92,14 +162,15 @@ export function parseResponseBodyForLog(
   try {
     return serializePayloadForLog(JSON.parse(trimmed) as unknown, maxBytes);
   } catch {
-    const byteLength = Buffer.byteLength(trimmed, "utf8");
+    const safe = redactRawText(trimmed);
+    const byteLength = Buffer.byteLength(safe, "utf8");
     if (byteLength <= maxBytes) {
-      return trimmed;
+      return safe;
     }
     return {
       __truncated: true,
       byteLength,
-      preview: trimmed.slice(0, maxBytes),
+      preview: safe.slice(0, maxBytes),
     } satisfies TruncatedPayload;
   }
 }
