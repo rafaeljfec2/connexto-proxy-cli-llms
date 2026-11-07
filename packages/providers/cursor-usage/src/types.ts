@@ -88,6 +88,10 @@ export interface CursorUsageServiceOptions {
   readonly authenticatedUrlPattern?: RegExp;
   readonly collectReadyUrlPattern?: RegExp;
   readonly chromiumExecutablePath?: string;
+  readonly cdpEndpoint?: string;
+  readonly cdpFallback?: boolean;
+  readonly chromiumNoSandbox?: boolean;
+  readonly collectHeadless?: boolean;
   readonly authHeadless?: boolean;
   readonly authUserDataDirRoot?: string;
   readonly authViewportWidth?: number;

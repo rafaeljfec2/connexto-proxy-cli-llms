@@ -18,6 +18,7 @@ services:
       LOG_LEVEL: info
       # Host .env often points at WSL Chrome + headed auth; invalid inside the container.
       CHROMIUM_EXECUTABLE_PATH: /usr/bin/chromium
+      CHROMIUM_NO_SANDBOX: "true"
       CURSOR_USAGE_AUTH_HEADLESS: "true"
       HOME: /var/lib/connexto-proxy/gateway-home
       CURSOR_USAGE_AUTH_USER_DATA_DIR: /var/lib/connexto-proxy/cursor-usage-auth

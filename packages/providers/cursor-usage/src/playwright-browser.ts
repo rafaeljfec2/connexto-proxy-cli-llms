@@ -3,11 +3,23 @@ import path from "node:path";
 import type { Browser, BrowserContext, Page } from "playwright-core";
 import type { StorageState } from "./types.js";
 import { chromium } from "playwright-core";
+import {
+  buildChromiumLaunchArgs,
+  resolveChromiumNoSandbox,
+} from "./chrome-launch.js";
 
 export interface PlaywrightBrowserOptions {
   readonly chromiumExecutablePath?: string;
   /** When false, opens a visible Chromium window for interactive Cursor OAuth (local dev). */
   readonly authHeadless?: boolean;
+  /** When false, opens a visible window for usage collect (helps pass Cloudflare on grok.com). */
+  readonly collectHeadless?: boolean;
+  /** Explicit --no-sandbox. When unset, headed sessions omit it; headless enables it. */
+  readonly chromiumNoSandbox?: boolean;
+  /** Attach to an existing Chrome (e.g. Windows host) instead of launching Playwright's profile. */
+  readonly cdpEndpoint?: string;
+  /** When true, headed auth/collect fall back to Playwright if CDP is unreachable. */
+  readonly cdpFallback?: boolean;
   /** Root directory for per-account Chrome profiles during interactive auth. */
   readonly authUserDataDirRoot?: string;
   readonly authViewportWidth?: number;
@@ -85,8 +97,13 @@ export class PlaywrightBrowserPool {
   private browser: Browser | undefined;
   private readonly contexts = new Map<string, LiveAuthContext>();
   private readonly sessionAccounts = new Map<string, string>();
+  private readonly cdpBrowsers = new Map<string, Browser>();
   private readonly executablePath?: string;
   private readonly authHeadless: boolean;
+  private readonly collectHeadless: boolean;
+  private readonly chromiumNoSandbox?: boolean;
+  private readonly cdpEndpoint?: string;
+  private readonly cdpFallback: boolean;
   private readonly authUserDataDirRoot?: string;
   private readonly authViewportWidth: number;
   private readonly authViewportHeight: number;
@@ -94,10 +111,22 @@ export class PlaywrightBrowserPool {
   constructor(options: PlaywrightBrowserOptions = {}) {
     this.executablePath = options.chromiumExecutablePath?.trim() || undefined;
     this.authHeadless = options.authHeadless !== false;
+    this.collectHeadless = options.collectHeadless !== false;
+    this.chromiumNoSandbox = options.chromiumNoSandbox;
+    const cdp = options.cdpEndpoint?.trim();
+    this.cdpEndpoint = cdp && cdp.length > 0 ? cdp.replace(/\/$/, "") : undefined;
+    this.cdpFallback = options.cdpFallback !== false;
     const root = options.authUserDataDirRoot?.trim();
     this.authUserDataDirRoot = root && root.length > 0 ? root : undefined;
     this.authViewportWidth = options.authViewportWidth ?? DEFAULT_AUTH_VIEWPORT_WIDTH;
     this.authViewportHeight = options.authViewportHeight ?? DEFAULT_AUTH_VIEWPORT_HEIGHT;
+  }
+
+  private noSandboxFor(headless: boolean): boolean {
+    return resolveChromiumNoSandbox({
+      explicit: this.chromiumNoSandbox,
+      headless,
+    });
   }
 
   public async ensureBrowser(): Promise<Browser> {
@@ -108,11 +137,27 @@ export class PlaywrightBrowserPool {
       this.browser = await chromium.launch({
         headless: true,
         executablePath: this.executablePath,
-        args: ["--no-sandbox", "--disable-dev-shm-usage"],
+        args: buildChromiumLaunchArgs(this.noSandboxFor(true)),
+        ignoreDefaultArgs: ["--enable-automation"],
       });
       return this.browser;
     } catch (error) {
       throw new BrowserUnavailableError(error);
+    }
+  }
+
+  private async connectCdpBrowser(): Promise<Browser> {
+    if (this.cdpEndpoint === undefined) {
+      throw new BrowserUnavailableError(new Error("CHROMIUM_CDP_ENDPOINT is not set"));
+    }
+    try {
+      return await chromium.connectOverCDP(this.cdpEndpoint);
+    } catch (error) {
+      throw new BrowserUnavailableError(
+        new Error(
+          `Cannot connect to Chrome at ${this.cdpEndpoint}. Start Chrome with --remote-debugging-port=9222 on the host that owns the UI. ${error instanceof Error ? error.message : ""}`.trim(),
+        ),
+      );
     }
   }
 
@@ -133,6 +178,45 @@ export class PlaywrightBrowserPool {
     }
   }
 
+  private async openHeadedPlaywrightAuth(
+    sessionId: string,
+    accountId: string,
+    loginUrl: string,
+  ): Promise<Page> {
+    const windowSize = `--window-size=${this.authViewportWidth},${this.authViewportHeight}`;
+    let context: BrowserContext;
+    try {
+      context = await chromium.launchPersistentContext(
+        this.resolveAuthProfileDir(accountId),
+        {
+          headless: false,
+          executablePath: this.executablePath,
+          args: buildChromiumLaunchArgs(this.noSandboxFor(false), [
+            "--force-device-scale-factor=1",
+            windowSize,
+          ]),
+          ignoreDefaultArgs: ["--enable-automation"],
+          viewport: {
+            width: this.authViewportWidth,
+            height: this.authViewportHeight,
+          },
+        },
+      );
+    } catch (error) {
+      throw new BrowserUnavailableError(error);
+    }
+    await context.addInitScript(() => {
+      Object.defineProperty(navigator, "webdriver", { get: () => false });
+    });
+    const page = context.pages()[0] ?? (await context.newPage());
+    await fitAuthWindowToViewport(page, this.authViewportWidth, this.authViewportHeight);
+    await page.goto(loginUrl, { waitUntil: "domcontentloaded", timeout: 60_000 });
+    await fitAuthWindowToViewport(page, this.authViewportWidth, this.authViewportHeight);
+    this.contexts.set(sessionId, { context, page });
+    this.sessionAccounts.set(sessionId, accountId);
+    return page;
+  }
+
   public async openAuthSession(
     sessionId: string,
     accountId: string,
@@ -140,41 +224,39 @@ export class PlaywrightBrowserPool {
   ): Promise<Page> {
     await this.closeAuthSessionsForAccount(accountId);
     if (!this.authHeadless) {
-      const windowSize = `--window-size=${this.authViewportWidth},${this.authViewportHeight}`;
-      let context: BrowserContext;
-      try {
-        context = await chromium.launchPersistentContext(
-          this.resolveAuthProfileDir(accountId),
-          {
-            headless: false,
-            executablePath: this.executablePath,
-            args: [
-              "--no-sandbox",
-              "--disable-dev-shm-usage",
-              "--disable-blink-features=AutomationControlled",
-              "--force-device-scale-factor=1",
-              windowSize,
-            ],
-            ignoreDefaultArgs: ["--enable-automation"],
-            viewport: {
-              width: this.authViewportWidth,
-              height: this.authViewportHeight,
-            },
-          },
-        );
-      } catch (error) {
-        throw new BrowserUnavailableError(error);
+      if (this.cdpEndpoint !== undefined) {
+        try {
+          const browser = await this.connectCdpBrowser();
+          const context = browser.contexts()[0];
+          if (context === undefined) {
+            throw new BrowserUnavailableError(
+              new Error("CDP browser has no default context"),
+            );
+          }
+          const page = await context.newPage();
+          await page.goto(loginUrl, { waitUntil: "domcontentloaded", timeout: 60_000 });
+          this.cdpBrowsers.set(sessionId, browser);
+          this.contexts.set(sessionId, { context, page });
+          this.sessionAccounts.set(sessionId, accountId);
+          return page;
+        } catch (error) {
+          if (!this.cdpFallback) {
+            throw error instanceof BrowserUnavailableError
+              ? error
+              : new BrowserUnavailableError(error);
+          }
+          console.warn(
+            JSON.stringify({
+              level: "warn",
+              msg: "cdp_connect_failed_falling_back",
+              endpoint: this.cdpEndpoint,
+              detail: error instanceof Error ? error.message : String(error),
+            }),
+          );
+        }
       }
-      await context.addInitScript(() => {
-        Object.defineProperty(navigator, "webdriver", { get: () => false });
-      });
-      const page = context.pages()[0] ?? (await context.newPage());
-      await fitAuthWindowToViewport(page, this.authViewportWidth, this.authViewportHeight);
-      await page.goto(loginUrl, { waitUntil: "domcontentloaded", timeout: 60_000 });
-      await fitAuthWindowToViewport(page, this.authViewportWidth, this.authViewportHeight);
-      this.contexts.set(sessionId, { context, page });
-      this.sessionAccounts.set(sessionId, accountId);
-      return page;
+
+      return this.openHeadedPlaywrightAuth(sessionId, accountId, loginUrl);
     }
 
     const browser = await this.ensureBrowser();
@@ -225,15 +307,12 @@ export class PlaywrightBrowserPool {
     accountId: string,
   ): Promise<BrowserContext> {
     const profileDir = this.resolveAuthProfileDir(accountId);
+    const headless = this.collectHeadless;
     const launch = (): Promise<BrowserContext> =>
       chromium.launchPersistentContext(profileDir, {
-        headless: true,
+        headless,
         executablePath: this.executablePath,
-        args: [
-          "--no-sandbox",
-          "--disable-dev-shm-usage",
-          "--disable-blink-features=AutomationControlled",
-        ],
+        args: buildChromiumLaunchArgs(this.noSandboxFor(headless)),
         ignoreDefaultArgs: ["--enable-automation"],
       });
     try {
@@ -257,6 +336,34 @@ export class PlaywrightBrowserPool {
         new Error("interactive Cursor login is still open for this account"),
       );
     }
+    if (this.cdpEndpoint !== undefined) {
+      try {
+        const browser = await this.connectCdpBrowser();
+        if (storageState.cookies.length > 0) {
+          return browser.newContext({ storageState });
+        }
+        const existing = browser.contexts()[0];
+        if (existing !== undefined) {
+          return existing;
+        }
+        return browser.newContext({ storageState });
+      } catch (error) {
+        if (!this.cdpFallback) {
+          throw error instanceof BrowserUnavailableError
+            ? error
+            : new BrowserUnavailableError(error);
+        }
+        console.warn(
+          JSON.stringify({
+            level: "warn",
+            msg: "cdp_connect_failed_falling_back",
+            endpoint: this.cdpEndpoint,
+            phase: "collect",
+            detail: error instanceof Error ? error.message : String(error),
+          }),
+        );
+      }
+    }
     const browser = await this.ensureBrowser();
     if (storageState.cookies.length > 0) {
       return browser.newContext({ storageState });
@@ -278,6 +385,12 @@ export class PlaywrightBrowserPool {
     }
     this.contexts.delete(sessionId);
     this.sessionAccounts.delete(sessionId);
+    const cdpBrowser = this.cdpBrowsers.get(sessionId);
+    this.cdpBrowsers.delete(sessionId);
+    if (cdpBrowser !== undefined) {
+      await live.page.close().catch(() => undefined);
+      return;
+    }
     await live.context.close();
   }
 

@@ -65,6 +65,10 @@ export function createGatewayServices(
       | "CURSOR_DEFAULT_WORKING_DIRECTORY"
       | "ANTIGRAVITY_STORAGE_PATH"
       | "CHROMIUM_EXECUTABLE_PATH"
+      | "CHROMIUM_CDP_ENDPOINT"
+      | "CHROMIUM_CDP_FALLBACK"
+      | "CHROMIUM_NO_SANDBOX"
+      | "CURSOR_USAGE_COLLECT_HEADLESS"
       | "CURSOR_USAGE_AUTH_HEADLESS"
       | "CURSOR_USAGE_AUTH_USER_DATA_DIR"
       | "CURSOR_USAGE_AUTH_VIEWPORT_WIDTH"
@@ -161,6 +165,10 @@ export function createGatewayServices(
         import("@agent-runtime-gateway/provider-cursor-usage").CursorUsageServiceOptions["store"]
       >,
       chromiumExecutablePath: env?.CHROMIUM_EXECUTABLE_PATH,
+      cdpEndpoint: env?.CHROMIUM_CDP_ENDPOINT,
+      cdpFallback: env?.CHROMIUM_CDP_FALLBACK,
+      chromiumNoSandbox: env?.CHROMIUM_NO_SANDBOX,
+      collectHeadless: env?.CURSOR_USAGE_COLLECT_HEADLESS,
       authHeadless: env?.CURSOR_USAGE_AUTH_HEADLESS,
       authUserDataDirRoot: env?.CURSOR_USAGE_AUTH_USER_DATA_DIR,
       authViewportWidth: env?.CURSOR_USAGE_AUTH_VIEWPORT_WIDTH,

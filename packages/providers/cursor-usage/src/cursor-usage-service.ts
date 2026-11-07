@@ -68,6 +68,10 @@ export class CursorUsageService {
       options.browserPool ??
       new PlaywrightBrowserPool({
         chromiumExecutablePath: options.chromiumExecutablePath,
+        cdpEndpoint: options.cdpEndpoint,
+        cdpFallback: options.cdpFallback,
+        chromiumNoSandbox: options.chromiumNoSandbox,
+        collectHeadless: options.collectHeadless,
         authHeadless: options.authHeadless,
         authUserDataDirRoot: options.authUserDataDirRoot,
         authViewportWidth: options.authViewportWidth,

@@ -89,6 +89,37 @@ const envSchema = z
         const trimmed = value?.trim();
         return trimmed ? trimmed : undefined;
       }),
+    CHROMIUM_CDP_ENDPOINT: z
+      .string()
+      .optional()
+      .transform((value) => {
+        const trimmed = value?.trim();
+        return trimmed ? trimmed.replace(/\/$/, "") : undefined;
+      }),
+    CHROMIUM_CDP_FALLBACK: z
+      .union([z.boolean(), z.enum(["true", "false", "1", "0"])])
+      .optional()
+      .transform((value) => {
+        if (value === undefined) return true;
+        if (typeof value === "boolean") return value;
+        return value !== "false" && value !== "0";
+      }),
+    CHROMIUM_NO_SANDBOX: z
+      .union([z.boolean(), z.enum(["true", "false", "1", "0"])])
+      .optional()
+      .transform((value) => {
+        if (value === undefined) return undefined;
+        if (typeof value === "boolean") return value;
+        return value !== "false" && value !== "0";
+      }),
+    CURSOR_USAGE_COLLECT_HEADLESS: z
+      .union([z.boolean(), z.enum(["true", "false", "1", "0"])])
+      .optional()
+      .transform((value) => {
+        if (value === undefined) return undefined;
+        if (typeof value === "boolean") return value;
+        return value !== "false" && value !== "0";
+      }),
     CURSOR_USAGE_AUTH_HEADLESS: z
       .union([z.boolean(), z.enum(["true", "false", "1", "0"])])
       .optional()

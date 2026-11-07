@@ -33,12 +33,13 @@ CHROMIUM_EXECUTABLE_PATH=/usr/bin/google-chrome
 
 Restart the proxy, click **Login web** in the Hub, and complete OAuth in the **Chromium window** opened by the proxy (not in the placeholder browser tab).
 
-### Bot detection (Google / “Can’t verify the user is human”)
+### Bot detection (Google / Cloudflare on x.ai / grok.com)
 
-Sites block Playwright-style browsers. Prefer:
+Sites block Playwright-style browsers (especially with `--no-sandbox`). Prefer:
 
-- **GitHub** sign-in instead of **Google** (Google often shows “This browser or app may not be secure”).
-- **Email sign-in code** instead of password when human verification fails.
+- **GitHub** or **email magic link** instead of **Google** (Google redirects to `accounts.x.ai`, which Cloudflare often blocks outright).
+- **CDP attach:** set `CHROMIUM_CDP_ENDPOINT` to a real Chrome on the desktop (Windows host `:9222` from WSL via the nameserver IP in `/etc/resolv.conf`). Complete login and open `https://grok.com/dashboard` in that browser — not in an isolated Playwright profile.
+- Headed local dev omits `--no-sandbox` by default; set `CHROMIUM_NO_SANDBOX=true` only if Chromium refuses to start (common in Docker).
 
 Headed auth uses a persistent Chrome profile under `~/.connexto-proxy/cursor-usage-auth/<accountId>` (override with `CURSOR_USAGE_AUTH_USER_DATA_DIR`). After a successful login, later collects reuse cookies from that profile.
 
