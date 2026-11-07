@@ -17,6 +17,8 @@ English technical documentation for **agent-runtime-gateway**.
 | [providers.md](providers.md)       | Cursor and Antigravity providers/credentials |
 | [testing.md](testing.md)           | Test layers and live integration             |
 | [logging.md](logging.md)           | Pino, `X-Request-ID`, redaction rules        |
+| [runbooks/edge-owned-execution-plan.md](runbooks/edge-owned-execution-plan.md) | **Agent runbook:** thin proxy vs local SDK (`edge_owned` / `local_runtime`) |
+
 
 ## Security & delivery
 
