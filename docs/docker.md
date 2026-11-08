@@ -18,6 +18,10 @@ Compose loads `.env` via `env_file`, then applies overrides below. **`environmen
 | `GATEWAY_API_TOKEN=${GATEWAY_API_TOKEN:-docker-local-gateway-dev}` | Non-loopback bind requires a token; empty `.env` values use the local default |
 | `CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium`                       | Host `.env` often sets WSL `google-chrome`, which does not exist in the image |
 | `CURSOR_USAGE_AUTH_HEADLESS=true`                                  | Container has no display; headed OAuth from `.env` (`false`) will fail        |
+| `BROWSER_BRIDGE_URL=http://host.docker.internal:4318`              | URL to reach Windows Host Browser Bridge via host-gateway                     |
+| `BROWSER_BRIDGE_TOKEN=${BROWSER_BRIDGE_TOKEN:-...}`                | Security token for Host Browser Bridge communication                          |
+
+The Compose configuration includes `extra_hosts: ["host.docker.internal:host-gateway"]`, allowing the containerized proxy to reach native Windows services.
 
 Set a strong, unique `GATEWAY_API_TOKEN` in `.env` before exposing the container beyond your machine. Use that value as `X-Gateway-API-Key` in Swagger.
 
@@ -85,11 +89,15 @@ Restarting or recreating the Proxy Docker container preserves provider sessions 
 - **Antigravity Host Credentials & Environment**: The compose file mounts `${HOST_GEMINI_DIR:-${HOME}/.gemini}` to `/app/.gemini` and `${HOST_ANTIGRAVITY_CONFIG_DIR:-${HOME}/.config/antigravity}` to `/app/.config/antigravity`, preserving Google OAuth tokens (`oauth_creds.json`, `jetski-standalone-oauth-token`, `google_accounts.json`) and CLI user scopes. The container sets `HOME=/app`, `AGY_PATH=/app/.gemini/bin/agy`, and adds `/app/.gemini/bin` to `PATH`.
 - **Container Re-creation**: Running `docker compose down && docker compose up -d` retains the `proxy-sessions` volume, eliminating the need to re-login to providers.
 
-### Cursor usage auth (Hub «Login web»)
+### Cursor usage auth & quota collection (Host Browser Bridge)
 
-Hub-initiated Cursor login calls `POST /v1/providers/cursor/auth`, which launches Chromium via Playwright. In Docker you must use the **bundled** Chromium (`/usr/bin/chromium`) and **headless** mode; keep `GATEWAY_API_TOKEN` in `.env` aligned with the Hub **Gateway API Key**.
+In Docker, the gateway delegates browser authentication and quota extraction to the **Host Browser Bridge** running natively on Windows at `http://host.docker.internal:4318`:
 
-For a **visible** browser window (social login, CAPTCHA), run `pnpm dev` on the host instead of Docker (`CURSOR_USAGE_AUTH_HEADLESS=false` + host Chrome path).
+- **Interactive Login («Login web»)**: Calls `POST /v1/providers/cursor/auth`. The bridge opens a native Windows Chrome window so the user can complete social login or CAPTCHA solving. Once completed, the session is stored in the persistent Windows user data directory (`%LOCALAPPDATA%\Connexto\BrowserBridge\profiles\<principalId>`).
+- **Background Quota Collect («Atualizar»)**: Calls `POST /v1/providers/cursor/usage/collect`. The bridge runs Chrome in background headless mode (`--headless=new`) using the authenticated persistent profile to retrieve usage data without popping up any desktop windows.
+- **Fallback**: If `BROWSER_BRIDGE_URL` is unreachable or unset, the container falls back to its internal bundled Chromium (`/usr/bin/chromium`) in headless mode.
+
+See [host-browser-bridge.md](host-browser-bridge.md) for bridge setup and architecture details.
 
 ### Clearing persisted sessions (API)
 

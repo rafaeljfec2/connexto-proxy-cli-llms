@@ -8,6 +8,8 @@ This is a **single-operator** project: no multi-tenant billing, no hosted SaaS f
 
 - **Express 5** API with OpenAI-compatible gateway routes
 - **Cursor provider** via `@cursor/sdk` (local agents, session resume, streaming)
+- **Cursor Usage & Quota Collector** (`@agent-runtime-gateway/provider-cursor-usage`) — real-time weekly budget, prepaid balance, and agent analytics
+- **Host Browser Bridge** (`@agent-runtime-gateway/host-browser-bridge`) — controls native Windows Chrome from WSL2 and Docker containers with persistent account profiles and zero-popup headless collection
 - **OpenAI compatibility layer** (`@agent-runtime-gateway/compatibility-openai`) — chat, completions, responses, SSE, tool/MCP mapping
 - **Core runtime** (`@agent-runtime-gateway/core`) — registry, router, executor, shared contracts
 - **Structured logging** (Pino) with `X-Request-ID` correlation — see [docs/logging.md](docs/logging.md)
@@ -123,14 +125,16 @@ There is **no separate gateway gate** yet: `GATEWAY_API_TOKEN` appears in `.env.
 
 ## Monorepo layout
 
-| Path                             | Package                                       | Role                                    |
-| -------------------------------- | --------------------------------------------- | --------------------------------------- |
-| `apps/api`                       | `@agent-runtime-gateway/api`                  | Express HTTP server                     |
-| `packages/core`                  | `@agent-runtime-gateway/core`                 | Provider contracts, registry, executor  |
-| `packages/providers/cursor`      | `@agent-runtime-gateway/provider-cursor`      | Cursor SDK + engine port                |
-| `packages/providers/antigravity` | `@agent-runtime-gateway/provider-antigravity` | Google Antigravity ACP & Usage provider |
-| `packages/compatibility/openai`  | `@agent-runtime-gateway/compatibility-openai` | OpenAI/Composer protocol & SSE          |
-| `tests/`                         | —                                             | Root Vitest suites (HTTP, logging, env) |
+| Path                              | Package                                        | Role                                    |
+| --------------------------------- | ---------------------------------------------- | --------------------------------------- |
+| `apps/api`                        | `@agent-runtime-gateway/api`                   | Express HTTP server                     |
+| `apps/host-browser-bridge`        | `@agent-runtime-gateway/host-browser-bridge`   | Windows Host Browser Bridge service     |
+| `packages/core`                   | `@agent-runtime-gateway/core`                  | Provider contracts, registry, executor  |
+| `packages/providers/cursor`       | `@agent-runtime-gateway/provider-cursor`       | Cursor SDK + engine port                |
+| `packages/providers/cursor-usage` | `@agent-runtime-gateway/provider-cursor-usage` | Cursor browser auth & quota collector   |
+| `packages/providers/antigravity`  | `@agent-runtime-gateway/provider-antigravity`  | Google Antigravity ACP & Usage provider |
+| `packages/compatibility/openai`   | `@agent-runtime-gateway/compatibility-openai`  | OpenAI/Composer protocol & SSE          |
+| `tests/`                          | —                                              | Root Vitest suites (HTTP, logging, env) |
 
 ## Scripts
 
@@ -138,6 +142,7 @@ There is **no separate gateway gate** yet: `GATEWAY_API_TOKEN` appears in `.env.
 | ------------------- | ------------------------------------------------------------ |
 | `pnpm dev`          | Start API with `tsx watch`                                   |
 | `pnpm start`        | Run compiled `apps/api/dist/server.js`                       |
+| `pnpm bridge`       | Start native Windows Host Browser Bridge service from WSL    |
 | `pnpm build`        | `tsc` build for all packages that define `build`             |
 | `pnpm test`         | Full Vitest suite (unit + HTTP; live tests skip without key) |
 | `pnpm test:watch`   | Vitest watch mode                                            |
@@ -162,18 +167,20 @@ See [docs/testing.md](docs/testing.md).
 
 ## Documentation index
 
-| Document                                                           | Contents                   |
-| ------------------------------------------------------------------ | -------------------------- |
-| [docs/README.md](docs/README.md)                                   | Documentation map          |
-| [docs/development.md](docs/development.md)                         | Day-to-day development     |
-| [docs/connexto-workflow.md](docs/connexto-workflow.md)             | Connexto demand workflow   |
-| [docs/architecture.md](docs/architecture.md)                       | System structure           |
-| [docs/api.md](docs/api.md)                                         | HTTP endpoints             |
-| [docs/configuration.md](docs/configuration.md)                     | Environment & auth         |
-| [docs/providers.md](docs/providers.md)                             | Cursor provider            |
-| [docs/logging.md](docs/logging.md)                                 | Pino logging & correlation |
-| [docs/security/SECURITY-AUDIT.md](docs/security/SECURITY-AUDIT.md) | Security notes             |
-| [docs/reports/](docs/reports/)                                     | Phase delivery reports     |
+| Document                                                           | Contents                    |
+| ------------------------------------------------------------------ | --------------------------- |
+| [docs/README.md](docs/README.md)                                   | Documentation map           |
+| [docs/development.md](docs/development.md)                         | Day-to-day development      |
+| [docs/connexto-workflow.md](docs/connexto-workflow.md)             | Connexto demand workflow    |
+| [docs/architecture.md](docs/architecture.md)                       | System structure            |
+| [docs/api.md](docs/api.md)                                         | HTTP endpoints              |
+| [docs/configuration.md](docs/configuration.md)                     | Environment & auth          |
+| [docs/providers.md](docs/providers.md)                             | Cursor & Antigravity        |
+| [docs/host-browser-bridge.md](docs/host-browser-bridge.md)         | Windows Host Browser Bridge |
+| [docs/docker.md](docs/docker.md)                                   | Docker container setup      |
+| [docs/logging.md](docs/logging.md)                                 | Pino logging & correlation  |
+| [docs/security/SECURITY-AUDIT.md](docs/security/SECURITY-AUDIT.md) | Security notes              |
+| [docs/reports/](docs/reports/)                                     | Phase delivery reports      |
 
 ## Security
 

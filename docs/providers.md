@@ -52,6 +52,20 @@ export CURSOR_API_KEY=...
 pnpm --filter @agent-runtime-gateway/provider-cursor test:integration
 ```
 
+### Cursor Usage & Quota Collector — `@agent-runtime-gateway/provider-cursor-usage`
+
+The Cursor Usage provider package exposes browser-automated quota collection and interactive session management for Cursor / Grok accounts:
+
+- **Interactive Auth (`POST /v1/providers/cursor/auth`)**: Starts an authentication session. Opens headed Chrome on Windows (via Host Browser Bridge) or local Chromium to let the user authenticate and solve CAPTCHAs.
+- **Quota Collection (`POST /v1/providers/cursor/usage/collect`)**: Collects user usage status and prepaid balance. When executed through the Host Browser Bridge, runs in modern invisible headless mode (`--headless=new`) using the authenticated user profile, completely avoiding intrusive popup windows.
+- **Endpoints Queried**:
+  - `GET /dashboard/api/dashboard/v2/usage-status?scope=user`: Extracts weekly budget, used amount, weekly resets, and weekly usage percentage.
+  - `POST /dashboard/api/dashboard/get-user-prepaid-billing`: Extracts available prepaid credits, monthly spending, and funded totals.
+  - `POST /dashboard/api/dashboard/get-user-analytics`: Summarizes historical agent requests and activities.
+- **Normalization**: Normalized output provides `total_usage`, `total_credits`, `weekly_used_percent`, `weekly_resets_at`, `prepaid_available_credits`, `monthly_spent`, and `analytics_agent_requests_total`.
+- **Session Status (`GET /v1/providers/cursor/usage/session`)**: Checks if the account has an active, authenticated browser profile.
+- **Session Cleanup (`POST /v1/providers/cursor/runtime/sessions/clear`)**: Clears the persisted browser profile and active sessions for the account.
+
 ## Antigravity — `@agent-runtime-gateway/provider-antigravity`
 
 ### Capabilities

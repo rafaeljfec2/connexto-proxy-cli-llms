@@ -15,6 +15,8 @@ English technical documentation for **agent-runtime-gateway**.
 | [development.md](development.md)                                               | Workspace, scripts, quality gates, roadmap                           |
 | [architecture.md](architecture.md)                                             | Packages and request flow                                            |
 | [providers.md](providers.md)                                                   | Cursor and Antigravity providers/credentials                         |
+| [host-browser-bridge.md](host-browser-bridge.md)                               | Windows Host Browser Bridge architecture                             |
+| [docker.md](docker.md)                                                         | Container build and compose configuration                            |
 | [testing.md](testing.md)                                                       | Test layers and live integration                                     |
 | [logging.md](logging.md)                                                       | Pino, `X-Request-ID`, redaction rules                                |
 | [runbooks/edge-owned-execution-plan.md](runbooks/edge-owned-execution-plan.md) | Archived proposal, superseded by current provider/configuration docs |
