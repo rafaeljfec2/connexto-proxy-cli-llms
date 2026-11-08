@@ -8,6 +8,8 @@ services:
     image: agent-runtime-gateway:local
     ports:
       - 9090:9090
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     env_file:
       - path: .env
         required: true
@@ -32,6 +34,8 @@ services:
       AGY_PATH: /app/.gemini/bin/agy
       ANTIGRAVITY_STORAGE_PATH: ${ANTIGRAVITY_STORAGE_PATH:-/app}
       PATH: /app/.gemini/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+      BROWSER_BRIDGE_URL: ${BROWSER_BRIDGE_URL:-http://host.docker.internal:4318}
+      BROWSER_BRIDGE_TOKEN: ${BROWSER_BRIDGE_TOKEN:-stage3-secure-token-xyz}
     volumes:
       # Dev default: one repo at /workspace (direct clients + CURSOR_DEFAULT_WORKING_DIRECTORY).
       # AI Hub + Codex resolve workspace only from the request payload (absolute host paths in <cwd>/<root>).
