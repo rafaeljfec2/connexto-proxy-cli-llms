@@ -14,3 +14,12 @@ export type {
   CursorUsageCollectResult,
   CursorUsageServiceOptions,
 } from "./types.js";
+export {
+  HostBrowserBridgeClient,
+  BridgeError,
+  BridgeUnauthorizedError,
+  BridgeForbiddenError,
+  BridgeSessionNotFoundError,
+  type HostBridgeClientOptions,
+  type HostBridgeSessionDto,
+} from "./host-bridge-client.js";

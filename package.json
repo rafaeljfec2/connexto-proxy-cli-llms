@@ -5,6 +5,9 @@
   "scripts": {
     "build": "pnpm -r run build",
     "dev": "pnpm --filter @agent-runtime-gateway/api dev",
+    "bridge": "bash scripts/start-bridge-windows.sh",
+    "bridge:windows": "bash scripts/start-bridge-windows.sh",
+    "bridge:restart": "bash scripts/start-bridge-windows.sh",
     "start": "pnpm --filter @agent-runtime-gateway/api start",
     "test": "vitest run",
     "test:watch": "vitest",

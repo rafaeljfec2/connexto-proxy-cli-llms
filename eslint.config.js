@@ -12,6 +12,7 @@ export default tseslint.config(
       "coverage/**",
       "eslint.config.js",
       "packages/providers/antigravity/tests/acp/fixture-agy.mjs",
+      "apps/host-browser-bridge/scripts/**",
       "spikes/cursor-usage-phase-b/**",
     ],
   },

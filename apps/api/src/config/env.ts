@@ -153,6 +153,8 @@ const envSchema = z
         const trimmed = value?.trim();
         return trimmed ? trimmed.replace(/\/$/, "") : undefined;
       }),
+    BROWSER_BRIDGE_URL: z.string().trim().optional(),
+    BROWSER_BRIDGE_TOKEN: z.string().trim().optional(),
   })
   .superRefine((env, context) => {
     const hasPrimaryToken = env.GATEWAY_API_TOKEN !== undefined;

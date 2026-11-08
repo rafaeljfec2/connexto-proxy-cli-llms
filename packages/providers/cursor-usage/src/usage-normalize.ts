@@ -23,11 +23,28 @@ export function resolveCollectApiUrl(
 export function normalizeCursorUsagePayload(
   usageStatus: unknown,
   analytics?: unknown,
+  prepaidBilling?: unknown,
 ): Record<string, unknown> {
-  const status =
+  const root =
     usageStatus !== null && typeof usageStatus === "object"
       ? (usageStatus as Record<string, unknown>)
       : {};
+
+  // Support envelope payload { usageStatus, prepaid, analytics }
+  const status: Record<string, unknown> =
+    root.usageStatus !== undefined && typeof root.usageStatus === "object"
+      ? (root.usageStatus as Record<string, unknown>)
+      : root;
+
+  const prepaid: Record<string, unknown> | undefined =
+    prepaidBilling !== undefined && typeof prepaidBilling === "object"
+      ? (prepaidBilling as Record<string, unknown>)
+      : root.prepaid !== undefined && typeof root.prepaid === "object"
+        ? (root.prepaid as Record<string, unknown>)
+        : undefined;
+
+  const resolvedAnalytics =
+    analytics ?? (root.analytics !== undefined ? root.analytics : undefined);
 
   const weekly = readRecord(status.weeklyIncludedUsage);
   let usedCents = readNumber(weekly?.usedCents);
@@ -49,6 +66,15 @@ export function normalizeCursorUsagePayload(
     budgetCents = readNumber(period?.limitCents);
   }
 
+  const monthly = readRecord(status.monthlyUsage);
+  if (usedCents === undefined) {
+    usedCents = readNumber(monthly?.usedCents);
+  }
+
+  if (usedCents === undefined && prepaid !== undefined) {
+    usedCents = readNumber(prepaid.spentThisMonthCents ?? prepaid.spentCents);
+  }
+
   const result: Record<string, unknown> = {
     currency: "USD",
     raw_usage_status: status,
@@ -61,7 +87,7 @@ export function normalizeCursorUsagePayload(
     result.total_credits = budgetCents / 100;
   }
 
-  const resetsAt = readString(status.resetsAt);
+  const resetsAt = readString(weekly?.resetsAt ?? status.resetsAt);
   if (resetsAt !== undefined) {
     result.weekly_resets_at = resetsAt;
   }
@@ -70,9 +96,25 @@ export function normalizeCursorUsagePayload(
     result.weekly_used_percent = (usedCents / budgetCents) * 100;
   }
 
-  if (analytics !== null && analytics !== undefined) {
-    result.raw_analytics = analytics;
-    const summary = summarizeAnalytics(analytics);
+  if (prepaid !== undefined) {
+    result.raw_prepaid_billing = prepaid;
+    const availableCents = readNumber(prepaid.availableCents);
+    if (availableCents !== undefined) {
+      result.prepaid_available_credits = availableCents / 100;
+    }
+    const spentThisMonthCents = readNumber(prepaid.spentThisMonthCents ?? prepaid.spentCents);
+    if (spentThisMonthCents !== undefined) {
+      result.monthly_spent = spentThisMonthCents / 100;
+    }
+    const fundedCents = readNumber(prepaid.fundedCents);
+    if (fundedCents !== undefined) {
+      result.prepaid_funded = fundedCents / 100;
+    }
+  }
+
+  if (resolvedAnalytics !== null && resolvedAnalytics !== undefined) {
+    result.raw_analytics = resolvedAnalytics;
+    const summary = summarizeAnalytics(resolvedAnalytics);
     if (summary !== undefined) {
       result.analytics_agent_requests_total = summary;
     }

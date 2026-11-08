@@ -73,6 +73,8 @@ export function createGatewayServices(
       | "CURSOR_USAGE_AUTH_USER_DATA_DIR"
       | "CURSOR_USAGE_AUTH_VIEWPORT_WIDTH"
       | "CURSOR_USAGE_AUTH_VIEWPORT_HEIGHT"
+      | "BROWSER_BRIDGE_URL"
+      | "BROWSER_BRIDGE_TOKEN"
       | "CURSOR_USAGE_LOGIN_URL"
       | "CURSOR_USAGE_DASHBOARD_URL"
       | "CURSOR_USAGE_STATUS_URL"
@@ -181,6 +183,8 @@ export function createGatewayServices(
       usageAnalyticsUrl: env?.CURSOR_USAGE_ANALYTICS_URL,
       authenticatedUrlPattern,
       usageResponseUrlPattern,
+      hostBridgeUrl: env?.BROWSER_BRIDGE_URL,
+      hostBridgeToken: env?.BROWSER_BRIDGE_TOKEN,
       interactionUrlBase:
         env?.CURSOR_USAGE_INTERACTION_URL_BASE ??
         `http://${env?.HOST ?? "127.0.0.1"}:${env?.PORT ?? 3000}`,

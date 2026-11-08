@@ -49,10 +49,11 @@ describeLiveApi("Gateway Live API Integration Suite", () => {
     const logger = createLogger({ destination: stream, level: "info" });
     setLogger(logger);
 
-    const app = buildApp();
+    const app = buildApp({ HOST: "127.0.0.1", GATEWAY_API_TOKEN: undefined });
     const res = await request(app)
       .post("/v1/chat/completions")
       .set("Authorization", `Bearer ${apiKey}`)
+      .set("Origin", "http://localhost:5173")
       .send({
         model: "composer-2.5",
         messages: [{ role: "user", content: "Reply with the single word: PONG" }],
@@ -97,10 +98,11 @@ describeLiveApi("Gateway Live API Integration Suite", () => {
     const logger = createLogger({ destination: stream, level: "info" });
     setLogger(logger);
 
-    const app = buildApp();
+    const app = buildApp({ HOST: "127.0.0.1", GATEWAY_API_TOKEN: undefined });
     const res = await request(app)
       .post("/v1/chat/completions")
       .set("Authorization", `Bearer ${apiKey}`)
+      .set("Origin", "http://localhost:5173")
       .send({
         model: "composer-2.5",
         messages: [{ role: "user", content: "Say hello briefly in one sentence." }],
@@ -133,10 +135,11 @@ describeLiveApi("Gateway Live API Integration Suite", () => {
   }, 90_000);
 
   it("executes POST /v1/responses against real Cursor API", async () => {
-    const app = buildApp();
+    const app = buildApp({ HOST: "127.0.0.1", GATEWAY_API_TOKEN: undefined });
     const res = await request(app)
       .post("/v1/responses")
       .set("Authorization", `Bearer ${apiKey}`)
+      .set("Origin", "http://localhost:5173")
       .send({
         model: "composer-2.5",
         input: [{ role: "user", content: "Reply with the single word: OK" }],

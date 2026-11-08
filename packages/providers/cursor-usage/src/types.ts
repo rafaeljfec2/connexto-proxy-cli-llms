@@ -97,6 +97,9 @@ export interface CursorUsageServiceOptions {
   readonly authViewportWidth?: number;
   readonly authViewportHeight?: number;
   readonly interactionUrlBase?: string;
+  readonly hostBridgeUrl?: string;
+  readonly hostBridgeToken?: string;
+  readonly hostBridgeClient?: import("./host-bridge-client.js").HostBrowserBridgeClient;
   readonly store?: import("@agent-runtime-gateway/core").NamespacedSessionStore<CursorUsageSessionRecord>;
   readonly browserPool?: import("./playwright-browser.js").PlaywrightBrowserPool;
   readonly now?: () => number;
