@@ -425,17 +425,24 @@ export class CursorUsageService {
       this.purgeExpiredAuthOperations();
       const sessionId = crypto.randomUUID();
       const expiresAt = this.now() + this.authOperationTtlMs;
-      const interactionUrl = `${this.interactionUrlBase}/v1/providers/cursor/auth/${sessionId}/interaction`;
+      let effectiveSessionId: string = sessionId;
+      let isAlreadyAuthenticated = false;
 
       try {
         if (this.hostBridgeClient) {
-          await this.hostBridgeClient.createSession({
+          const launched = await this.hostBridgeClient.createSession({
             sessionId,
             principalId: accountId,
             target: "cursor",
             targetUrl: this.loginUrl,
             headless: false,
           });
+          if (launched && launched.sessionId) {
+            effectiveSessionId = launched.sessionId;
+          }
+          if (launched && launched.status === "authenticated") {
+            isAlreadyAuthenticated = true;
+          }
         } else {
           await this.browserPool.openAuthSession(sessionId, accountId, this.loginUrl);
         }
@@ -446,19 +453,34 @@ export class CursorUsageService {
         throw new BrowserUnavailableError(error);
       }
 
+      const interactionUrl = `${this.interactionUrlBase}/v1/providers/cursor/auth/${effectiveSessionId}/interaction`;
       const operation: CursorUsageAuthOperation = {
-        sessionId,
+        sessionId: effectiveSessionId,
         accountId,
-        status: "authentication_pending",
+        status: isAlreadyAuthenticated ? "authenticated" : "authentication_pending",
         createdAt: this.now(),
         expiresAt,
         interactionUrl,
       };
-      this.authOperations.set(sessionId, operation);
+      this.authOperations.set(effectiveSessionId, operation);
+
+      if (isAlreadyAuthenticated) {
+        await this.sessionStore
+          .setPersisted(
+            {
+              accountId,
+              status: "authenticated",
+              touchedAt: this.now(),
+              authProfileBacked: true,
+            },
+            { allowAuthProfileFallback: true },
+          )
+          .catch(() => undefined);
+      }
 
       return {
         status: "authentication_pending",
-        sessionId,
+        sessionId: effectiveSessionId,
         expiresAt: new Date(expiresAt).toISOString(),
         interactionUrl,
         browserMode: this.hostBridgeClient
@@ -679,6 +701,18 @@ export class CursorUsageService {
     this.authOperations.clear();
     this.sessionStore.clearMemory();
     await this.browserPool.shutdown();
+    if (this.hostBridgeClient) {
+      try {
+        const sessions = await this.hostBridgeClient.listSessions();
+        for (const s of sessions) {
+          if (s.target === "cursor" || s.principalId === "cursor") {
+            await this.hostBridgeClient.closeSession(s.sessionId, s.principalId).catch(() => undefined);
+          }
+        }
+      } catch {
+        // Best-effort remote bridge cleanup
+      }
+    }
   }
 
   private purgeExpiredAuthOperations(): void {

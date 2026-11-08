@@ -103,9 +103,15 @@ export class BrowserSessionManager {
     if (existingForPrincipal) {
       const proc = this.processes.get(existingForPrincipal.id);
       if (proc && proc.isAlive()) {
-        return existingForPrincipal;
+        // If the caller specified a specific new id (different from existing), terminate old session and proceed
+        if (params.id && params.id !== existingForPrincipal.id) {
+          await this.closeSession(existingForPrincipal.id, params.principalId);
+        } else {
+          return existingForPrincipal;
+        }
+      } else {
+        await this.closeSession(existingForPrincipal.id, params.principalId);
       }
-      await this.closeSession(existingForPrincipal.id, params.principalId);
     }
 
     if (this.sessions.size >= this.maxConcurrentSessions) {

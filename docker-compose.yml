@@ -30,7 +30,7 @@ services:
       GATEWAY_JSON_BODY_LIMIT_BYTES: ${GATEWAY_JSON_BODY_LIMIT_BYTES:-33554432}
       CURSOR_DEFAULT_WORKING_DIRECTORY: /workspace
       SESSION_STORAGE_DRIVER: ${SESSION_STORAGE_DRIVER:-filesystem}
-      SESSION_STORAGE_PATH: ${SESSION_STORAGE_PATH:-/var/lib/connexto-proxy/sessions}
+      SESSION_STORAGE_PATH: ${DOCKER_SESSION_STORAGE_PATH:-/var/lib/connexto-proxy/sessions}
       AGY_PATH: /app/.gemini/bin/agy
       ANTIGRAVITY_STORAGE_PATH: ${ANTIGRAVITY_STORAGE_PATH:-/app}
       PATH: /app/.gemini/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin

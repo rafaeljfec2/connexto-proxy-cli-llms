@@ -186,4 +186,28 @@ describe("BrowserSessionManager", () => {
     expect(entryB?.closeMock).toHaveBeenCalledTimes(1);
     expect(manager.activeSessionsCount).toBe(0);
   });
+
+  it("replaces previous session when createSession is called with a new id for the same principal", async () => {
+    const { launcher, launchedProcesses } = createMockLauncher();
+    const manager = new BrowserSessionManager({ launcher });
+
+    const session1 = await manager.createSession({
+      id: "session-old",
+      principalId: "cursor",
+      target: "cursor",
+    });
+    expect(session1.id).toBe("session-old");
+
+    const session2 = await manager.createSession({
+      id: "session-new",
+      principalId: "cursor",
+      target: "cursor",
+    });
+
+    // It MUST return the new session with the requested id, not keep the old session
+    expect(session2.id).toBe("session-new");
+    expect(launchedProcesses.get("session-old")?.proc.isAlive()).toBe(false);
+    expect(manager.getSession("session-new", "cursor").id).toBe("session-new");
+    expect(() => manager.getSession("session-old", "cursor")).toThrow(SessionNotFoundError);
+  });
 });
