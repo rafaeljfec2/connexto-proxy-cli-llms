@@ -370,4 +370,55 @@ describe("AntigravityProvider", () => {
     expect(report.acp_sessions_closed).toBe(2);
     expect(report.acp_close_failures).toBe(0);
   });
+
+  it("rejects tool_choice for non-existent function before execution", async () => {
+    const client = new FakeAcpClient();
+    const provider = new AntigravityProvider({
+      clientFactory: () => client,
+    });
+
+    await expect(
+      provider.execute(
+        input({
+          tools: [{ name: "declared_tool", parameters: {} }],
+          toolChoice: { type: "function", function: { name: "missing_tool" } },
+        }),
+      ),
+    ).rejects.toThrow("Requested tool 'missing_tool' in tool_choice was not found in declared tools.");
+  });
+
+  it("appends anti-parallel instruction when parallelToolCalls is false", async () => {
+    const client = new FakeAcpClient();
+    const provider = new AntigravityProvider({
+      clientFactory: () => client,
+    });
+
+    const run = await provider.execute(
+      input({
+        tools: [{ name: "my_tool", parameters: {} }],
+        parallelToolCalls: false,
+      }),
+    );
+    await run.wait();
+
+    const textBlocks = (client.lastBlocks ?? []).filter((b: any) => b.type === "text");
+    expect(textBlocks[0].text).toContain("Parallel tool calling is disabled");
+  });
+
+  it("rejects response when tool_choice='required' and no tool is invoked", async () => {
+    const client = new FakeAcpClient();
+    const provider = new AntigravityProvider({
+      clientFactory: () => client,
+    });
+
+    const run = await provider.execute(
+      input({
+        tools: [{ name: "my_tool", parameters: {} }],
+        toolChoice: "required",
+      }),
+    );
+
+    const result = await run.wait();
+    expect(result.status).toBe("failed");
+  });
 });

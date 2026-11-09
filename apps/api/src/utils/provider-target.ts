@@ -54,18 +54,8 @@ export function providerCredential(
 }
 
 export function assertAntigravityToolsUnsupported(
-  target: ProviderExecutionTarget,
-  toolCount: number,
+  _target: ProviderExecutionTarget,
+  _toolCount: number,
 ): void {
-  if (target.providerId !== "antigravity") {
-    return;
-  }
-  if (toolCount > 0) {
-    throw new HttpError(
-      "OpenAI tools are not supported for Antigravity models yet.",
-      400,
-      "unsupported_parameter",
-      "tools",
-    );
-  }
+  // Function tools are now supported for Antigravity models.
 }

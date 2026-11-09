@@ -244,7 +244,7 @@ describe("Antigravity gateway routing", () => {
     });
   });
 
-  it("keeps tools explicitly rejected for Antigravity", async () => {
+  it("accepts and forwards function tools for Antigravity", async () => {
     const app = buildApp({ HOST: "127.0.0.1" });
     const tools = await request(app)
       .post("/v1/chat/completions")
@@ -258,8 +258,10 @@ describe("Antigravity gateway routing", () => {
         ],
       });
 
-    expect(tools.status).toBe(400);
-    expect(executedInputs).toHaveLength(0);
+    expect(tools.status).toBe(200);
+    expect(executedInputs).toHaveLength(1);
+    expect(executedInputs[0].tools).toHaveLength(1);
+    expect(executedInputs[0].tools?.[0].name).toBe("lookup");
   });
 
   it("rejects invalid Antigravity image payloads without executing a provider", async () => {

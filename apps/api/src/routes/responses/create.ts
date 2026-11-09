@@ -154,6 +154,11 @@ export async function handleCreateResponse(req: Request, res: Response): Promise
       return;
     }
 
+    const inputItems = Array.isArray(req.body?.input)
+      ? (req.body.input as unknown[])
+      : [];
+    const toolResults = extractActiveResponseToolResults(inputItems);
+
     const providerStart = performance.now();
     const run = await services.executor.execute(target.providerId, {
       sessionId: sessionAffinity,
@@ -165,6 +170,17 @@ export async function handleCreateResponse(req: Request, res: Response): Promise
       ...(target.providerId === "cursor"
         ? { cursor: buildCursorExecutionContext(req, prepared) }
         : {}),
+      ...(prepared.tools.length > 0 ? { tools: prepared.tools } : {}),
+      ...(req.body?.tool_choice !== undefined
+        ? { toolChoice: req.body.tool_choice }
+        : {}),
+      ...(typeof req.body?.parallel_tool_calls === "boolean"
+        ? { parallelToolCalls: req.body.parallel_tool_calls }
+        : {}),
+      ...(typeof (req.body?.reasoning?.effort ?? req.body?.reasoning_effort) === "string"
+        ? { reasoningEffort: req.body?.reasoning?.effort ?? req.body?.reasoning_effort }
+        : {}),
+      ...(toolResults.length > 0 ? { toolResults } : {}),
       ...executionImagesInput(images),
     });
 
@@ -303,6 +319,11 @@ export async function handleCreateResponse(req: Request, res: Response): Promise
       text: runOutput.text,
       toolCalls: runOutput.toolCalls,
       promptChars: prepared.promptChars,
+      usage: runOutput.usage,
+      reasoningEffort:
+        typeof (req.body?.reasoning?.effort ?? req.body?.reasoning_effort) === "string"
+          ? (req.body?.reasoning?.effort ?? req.body?.reasoning_effort)
+          : undefined,
     });
 
     if (prepared.storeResponse) {
@@ -327,4 +348,39 @@ export async function handleCreateResponse(req: Request, res: Response): Promise
     }
     cancellation.dispose();
   }
+}
+
+function extractActiveResponseToolResults(
+  inputItems: readonly unknown[],
+): { toolCallId: string; content: string }[] {
+  let lastFunctionCallIdx = -1;
+  for (let i = inputItems.length - 1; i >= 0; i--) {
+    const item = inputItems[i];
+    if (
+      item &&
+      typeof item === "object" &&
+      (item as Record<string, unknown>).type === "function_call"
+    ) {
+      lastFunctionCallIdx = i;
+      break;
+    }
+  }
+
+  const activeItems =
+    lastFunctionCallIdx >= 0 ? inputItems.slice(lastFunctionCallIdx + 1) : inputItems;
+
+  return activeItems
+    .filter(
+      (item): item is Record<string, unknown> =>
+        Boolean(item) &&
+        typeof item === "object" &&
+        (item as Record<string, unknown>).type === "function_call_output",
+    )
+    .map((item) => ({
+      toolCallId: typeof item.call_id === "string" ? item.call_id : "",
+      content:
+        typeof item.output === "string"
+          ? item.output
+          : JSON.stringify(item.output ?? ""),
+    }));
 }

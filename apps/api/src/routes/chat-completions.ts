@@ -130,6 +130,10 @@ export function registerChatCompletionRoutes(app: Express): void {
           return;
         }
 
+        const toolResults = extractActiveToolResults(
+          Array.isArray(req.body?.messages) ? (req.body.messages as unknown[]) : [],
+        );
+
         const services = getGatewayServices();
         const providerStart = performance.now();
         const run = await services.executor.execute(target.providerId, {
@@ -142,6 +146,17 @@ export function registerChatCompletionRoutes(app: Express): void {
           ...(target.providerId === "cursor"
             ? { cursor: buildCursorExecutionContext(req, prepared) }
             : {}),
+          ...(prepared.tools.length > 0 ? { tools: prepared.tools } : {}),
+          ...(req.body?.tool_choice !== undefined
+            ? { toolChoice: req.body.tool_choice }
+            : {}),
+          ...(typeof req.body?.parallel_tool_calls === "boolean"
+            ? { parallelToolCalls: req.body.parallel_tool_calls }
+            : {}),
+          ...(typeof req.body?.reasoning_effort === "string"
+            ? { reasoningEffort: req.body.reasoning_effort }
+            : {}),
+          ...(toolResults.length > 0 ? { toolResults } : {}),
           ...executionImagesInput(images),
         });
 
@@ -269,6 +284,7 @@ export function registerChatCompletionRoutes(app: Express): void {
           text: runOutput.text,
           toolCalls: runOutput.toolCalls,
           promptChars: prepared.promptChars,
+          usage: runOutput.usage,
           ...(target.providerId === "cursor"
             ? { metadata: { cursor_run_id: run.id } }
             : {}),
@@ -283,4 +299,44 @@ export function registerChatCompletionRoutes(app: Express): void {
       }
     },
   );
+}
+
+function extractActiveToolResults(
+  messages: readonly unknown[],
+): { toolCallId: string; toolName?: string; content: string }[] {
+  let lastAssistantWithToolsIdx = -1;
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const m = messages[i];
+    if (
+      m &&
+      typeof m === "object" &&
+      (m as Record<string, unknown>).role === "assistant" &&
+      Array.isArray((m as Record<string, unknown>).tool_calls) &&
+      ((m as Record<string, unknown>).tool_calls as unknown[]).length > 0
+    ) {
+      lastAssistantWithToolsIdx = i;
+      break;
+    }
+  }
+
+  const activeMessages =
+    lastAssistantWithToolsIdx >= 0
+      ? messages.slice(lastAssistantWithToolsIdx + 1)
+      : messages;
+
+  return activeMessages
+    .filter(
+      (m): m is Record<string, unknown> =>
+        Boolean(m) &&
+        typeof m === "object" &&
+        (m as Record<string, unknown>).role === "tool",
+    )
+    .map((m) => ({
+      toolCallId: typeof m.tool_call_id === "string" ? m.tool_call_id : "",
+      toolName: typeof m.name === "string" ? m.name : undefined,
+      content:
+        typeof m.content === "string"
+          ? m.content
+          : JSON.stringify(m.content ?? ""),
+    }));
 }

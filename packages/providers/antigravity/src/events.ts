@@ -1,4 +1,8 @@
-import type { AgentEvent, AgentResult } from "@agent-runtime-gateway/core";
+import type {
+  AgentEvent,
+  AgentExecutionUsage,
+  AgentResult,
+} from "@agent-runtime-gateway/core";
 
 export function createRunStartedEvent(input: {
   readonly runId: string;
@@ -19,22 +23,56 @@ export function mapAcpUpdateToEvent(
   kind: string,
   update: unknown,
 ): AgentEvent | undefined {
-  if (kind !== "agent_message_chunk" || !isRecord(update)) {
+  if (!isRecord(update)) {
     return undefined;
   }
-  const content = update["content"];
-  if (!isRecord(content) || typeof content["text"] !== "string") {
-    return undefined;
+
+  // 1. Message text streaming chunk
+  if (kind === "agent_message_chunk") {
+    const content = update["content"];
+    if (!isRecord(content) || typeof content["text"] !== "string") {
+      return undefined;
+    }
+    const delta = content["text"];
+    if (delta.length === 0) {
+      return undefined;
+    }
+    return { type: "message.delta", runId, delta };
   }
-  const delta = content["text"];
-  if (delta.length === 0) {
-    return undefined;
+
+  // 2. Reasoning thought streaming chunk
+  if (kind === "agent_thought_chunk") {
+    const content = update["content"];
+    if (!isRecord(content) || typeof content["text"] !== "string") {
+      return undefined;
+    }
+    const delta = content["text"];
+    if (delta.length === 0) {
+      return undefined;
+    }
+    return { type: "reasoning.delta", runId, delta };
   }
-  return { type: "message.delta", runId, delta };
+
+  return undefined;
 }
 
-export function createCompletedResult(text: string): AgentResult {
-  return { status: "completed", output: { text } };
+export function createCompletedResult(
+  output: {
+    text: string;
+    thoughtText?: string;
+    toolCalls?: readonly {
+      readonly id: string;
+      readonly name: string;
+      readonly arguments: string;
+    }[];
+  },
+  usage?: AgentExecutionUsage,
+): AgentResult {
+  return {
+    status: "completed",
+    output,
+    ...(usage !== undefined ? { usage } : {}),
+  };
 }
 
 export function createCancelledResult(): AgentResult {

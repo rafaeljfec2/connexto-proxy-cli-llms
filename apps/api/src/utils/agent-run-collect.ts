@@ -1,10 +1,11 @@
-import type { AgentEvent, AgentRun } from "@agent-runtime-gateway/core";
+import type { AgentEvent, AgentExecutionUsage, AgentRun } from "@agent-runtime-gateway/core";
 import type { OpenAiToolCall } from "@agent-runtime-gateway/compatibility-openai";
 
 export interface AgentRunOutput {
   text: string;
   toolCalls: OpenAiToolCall[];
   sawFailure: boolean;
+  usage?: AgentExecutionUsage;
 }
 
 export function openAiToolCallFromAgentEvent(

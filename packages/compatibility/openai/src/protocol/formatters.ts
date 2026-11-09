@@ -3,8 +3,8 @@ import { isRecord } from "./common.js";
 import {
   completionCharsFromOutput,
   pricingForModel,
-  responseUsageFromChars,
-  usageFromChars,
+  responseUsageFromExecution,
+  usageFromExecution,
 } from "./pricing.js";
 
 export function chatCompletionResponse(input: {
@@ -14,6 +14,12 @@ export function chatCompletionResponse(input: {
   text: string;
   toolCalls?: OpenAiToolCall[];
   promptChars: number;
+  usage?: {
+    inputTokens?: number;
+    outputTokens?: number;
+    totalTokens?: number;
+    thoughtTokens?: number;
+  };
   metadata?: Record<string, unknown>;
 }): Record<string, unknown> {
   const toolCalls = input.toolCalls ?? [];
@@ -37,7 +43,7 @@ export function chatCompletionResponse(input: {
         finish_reason: toolCalls.length ? "tool_calls" : "stop",
       },
     ],
-    usage: usageFromChars(input.model, input.promptChars, completionChars),
+    usage: usageFromExecution(input.model, input.usage, input.promptChars, completionChars),
     service_tier: "default",
     system_fingerprint: null,
     ...input.metadata,
@@ -51,6 +57,13 @@ export function responseObject(input: {
   text: string;
   toolCalls?: OpenAiToolCall[];
   promptChars: number;
+  usage?: {
+    inputTokens?: number;
+    outputTokens?: number;
+    totalTokens?: number;
+    thoughtTokens?: number;
+  };
+  reasoningEffort?: string;
   metadata?: Record<string, unknown>;
 }): Record<string, unknown> {
   const messageId = `msg_${input.id.slice(5)}`;
@@ -93,12 +106,12 @@ export function responseObject(input: {
     output,
     parallel_tool_calls: true,
     previous_response_id: null,
-    reasoning: { effort: null, summary: null },
+    reasoning: { effort: input.reasoningEffort ?? null, summary: null },
     store: false,
     tool_choice: "auto",
     tools: [],
     truncation: "disabled",
-    usage: responseUsageFromChars(input.model, input.promptChars, outputChars),
+    usage: responseUsageFromExecution(input.model, input.usage, input.promptChars, outputChars),
     user: null,
     metadata: {},
     ...input.metadata,

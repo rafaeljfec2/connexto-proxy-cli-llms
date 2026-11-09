@@ -33,3 +33,10 @@ export type {
 } from "./types.js";
 export * from "./usage/index.js";
 export * from "./images/index.js";
+export * from "./mcp/index.js";
+export {
+  PendingToolRegistry,
+  PendingToolRegistryError,
+  type PendingToolCallRecord,
+  type PendingToolRegistryOptions,
+} from "./pending-tools.js";

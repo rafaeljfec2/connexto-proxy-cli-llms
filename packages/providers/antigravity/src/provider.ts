@@ -46,9 +46,11 @@ import {
   type AcpSessionRecord,
   type AntigravitySessionStoreOptions,
 } from "./session-store.js";
+import { AntigravityMcpBridge } from "./mcp/index.js";
 
 export interface AntigravityAcpClient {
   connect(): Promise<void>;
+  authenticate?(methodId?: string): Promise<void>;
   createSession(cwd: string, mcpServers?: unknown[]): Promise<{ sessionId: string }>;
   resumeSession(
     sessionId: string,
@@ -80,9 +82,11 @@ export interface AntigravityRuntimeSessionClearReport {
   readonly warnings: readonly string[];
 }
 
-const ACP_CONNECT_TIMEOUT_MS = 20_000;
-const ACP_LIST_SESSIONS_TIMEOUT_MS = 15_000;
-const ACP_CLOSE_SESSION_TIMEOUT_MS = 15_000;
+const ACP_CONNECT_TIMEOUT_MS = 3_000;
+const ACP_LIST_SESSIONS_TIMEOUT_MS = 2_000;
+const ACP_CLOSE_SESSION_TIMEOUT_MS = 2_000;
+
+import { PendingToolRegistry } from "./pending-tools.js";
 
 export interface AntigravityProviderOptions {
   readonly clientFactory?: (cwd: string) => AntigravityAcpClient;
@@ -92,6 +96,7 @@ export interface AntigravityProviderOptions {
   readonly sessionOptions?: AntigravitySessionStoreOptions;
   readonly sessionStore?:
     NamespacedSessionStore<AcpSessionRecord> | SessionStore<AcpSessionRecord>;
+  readonly pendingTools?: PendingToolRegistry;
 }
 
 const DEFAULT_CANCEL_GRACE_MS = 3_000;
@@ -110,6 +115,7 @@ export class AntigravityProvider implements AgentProvider {
   private readonly cancelGraceMs: number;
   private readonly sessions: AntigravitySessionStore;
   private readonly activeSessions = new Set<string>();
+  public readonly pendingTools: PendingToolRegistry;
 
   constructor(options: AntigravityProviderOptions = {}) {
     this.homeDir = options.homeDir;
@@ -121,6 +127,7 @@ export class AntigravityProvider implements AgentProvider {
       ...options.sessionOptions,
       store: options.sessionOptions?.store ?? options.sessionStore,
     });
+    this.pendingTools = options.pendingTools ?? new PendingToolRegistry();
   }
 
   public listModels(): Promise<Model[]> {
@@ -153,6 +160,7 @@ export class AntigravityProvider implements AgentProvider {
   public clearSessionCaches(): void {
     this.sessions.clearInMemory();
     this.activeSessions.clear();
+    this.pendingTools.clear();
   }
 
   public async execute(input: AgentExecutionInput): Promise<AgentRun> {
@@ -167,36 +175,142 @@ export class AntigravityProvider implements AgentProvider {
     if (this.activeSessions.has(input.sessionId)) {
       throw new AcpTurnInProgressError();
     }
+
+    if (input.reasoningEffort && acpModel !== "gemini-3.8-flash") {
+      throw new Error(
+        `Reasoning effort is not supported for model '${input.model}'. Only gemini-3.8-flash supports thought_level.`,
+      );
+    }
+
+    if (
+      typeof input.toolChoice === "object" &&
+      input.toolChoice !== null &&
+      input.toolChoice.type === "function"
+    ) {
+      const requiredName = input.toolChoice.function.name;
+      const toolExists = input.tools?.some((t) => t.name === requiredName);
+      if (!toolExists) {
+        throw new Error(
+          `Requested tool '${requiredName}' in tool_choice was not found in declared tools.`,
+        );
+      }
+    }
+
+    if (input.toolResults && input.toolResults.length > 0) {
+      for (const result of input.toolResults) {
+        this.pendingTools.validateAndConsume(
+          result.toolCallId,
+          input.sessionId,
+          result.toolName,
+        );
+      }
+    }
+
     const cwd = resolveWorkingDirectory(
       input.workingDirectory,
       this.defaultWorkingDirectory,
     );
     const client = this.clientFactory(cwd);
     this.activeSessions.add(input.sessionId);
-    let acpSessionId: string;
+
+    let bridge: AntigravityMcpBridge | undefined;
+    let mcpServers: unknown[] | undefined;
+    const recordedToolCalls: { id: string; name: string; arguments: string }[] = [];
+    const runId = `run_${randomUUID().replaceAll("-", "")}`;
+    const queue = new AsyncEventQueue();
+
     try {
+      if (input.tools && input.tools.length > 0 && input.toolChoice !== "none") {
+        bridge = new AntigravityMcpBridge({
+          sessionId: input.sessionId,
+          tools: input.tools,
+          onToolCall: (call) => {
+            this.pendingTools.register({
+              callId: call.callId,
+              toolName: call.name,
+              arguments: call.arguments,
+              sessionId: input.sessionId,
+            });
+            const argsStr = JSON.stringify(call.arguments);
+            queue.push({
+              type: "tool.call",
+              runId,
+              callId: call.callId,
+              toolName: call.name,
+              arguments: argsStr,
+            });
+            recordedToolCalls.push({
+              id: call.callId,
+              name: call.name,
+              arguments: argsStr,
+            });
+          },
+          onToolResult: (callId, toolRes) => {
+            queue.push({
+              type: "tool.result",
+              runId,
+              callId,
+              output: toolRes.output,
+            });
+          },
+        });
+        const mcpConfig = await bridge.start();
+        mcpServers = [mcpConfig];
+      }
+
       await client.connect();
-      acpSessionId = await this.acquireAcpSession(client, input.sessionId, cwd);
+      if (typeof client.authenticate === "function") {
+        await client.authenticate("oauth-personal");
+      }
+      const acpSessionId = await this.acquireAcpSession(
+        client,
+        input.sessionId,
+        cwd,
+        mcpServers,
+      );
       await client.setSessionConfig(acpSessionId, "model", acpModel);
+      if (input.reasoningEffort && acpModel === "gemini-3.8-flash") {
+        await client.setSessionConfig(
+          acpSessionId,
+          "thought_level",
+          input.reasoningEffort,
+        );
+      }
       input.signal?.throwIfAborted();
+
+      return this.createRun(
+        client,
+        input,
+        acpSessionId,
+        runId,
+        queue,
+        bridge,
+        recordedToolCalls,
+      );
     } catch (error) {
+      if (bridge) {
+        await bridge.dispose().catch(() => {});
+      }
       this.activeSessions.delete(input.sessionId);
       await terminatePreservingCause(client, error);
       throw error;
     }
-
-    return this.createRun(client, input, acpSessionId);
   }
 
   private async acquireAcpSession(
     client: AntigravityAcpClient,
     gatewaySessionId: string,
     cwd: string,
+    mcpServers?: unknown[],
   ): Promise<string> {
     const savedSessionId = await this.sessions.resolve(gatewaySessionId);
     if (savedSessionId !== undefined) {
       try {
-        await client.resumeSession(savedSessionId, cwd);
+        if (mcpServers !== undefined) {
+          await client.resumeSession(savedSessionId, cwd, mcpServers);
+        } else {
+          await client.resumeSession(savedSessionId, cwd);
+        }
         return savedSessionId;
       } catch {
         // Resume failures fall back to a new ACP session, as Cursor does.
@@ -204,7 +318,7 @@ export class AntigravityProvider implements AgentProvider {
       }
     }
 
-    const created = await client.createSession(cwd);
+    const created = await client.createSession(cwd, mcpServers);
     await this.sessions.setPersisted(gatewaySessionId, created.sessionId);
     return created.sessionId;
   }
@@ -213,9 +327,11 @@ export class AntigravityProvider implements AgentProvider {
     client: AntigravityAcpClient,
     input: AgentExecutionInput,
     acpSessionId: string,
+    runId: string,
+    queue: AsyncEventQueue,
+    bridge: AntigravityMcpBridge | undefined,
+    recordedToolCalls: { id: string; name: string; arguments: string }[],
   ): AgentRun {
-    const runId = `run_${randomUUID().replaceAll("-", "")}`;
-    const queue = new AsyncEventQueue();
     const startedEvent = createRunStartedEvent({
       runId,
       sessionId: input.sessionId,
@@ -237,6 +353,8 @@ export class AntigravityProvider implements AgentProvider {
       acpSessionId,
       runId,
       queue,
+      bridge,
+      recordedToolCalls,
       () => cancelRequested,
       () => cancellationFailure,
       abortListener,
@@ -294,6 +412,8 @@ export class AntigravityProvider implements AgentProvider {
     acpSessionId: string,
     runId: string,
     queue: AsyncEventQueue,
+    bridge: AntigravityMcpBridge | undefined,
+    recordedToolCalls: { id: string; name: string; arguments: string }[],
     isCancelRequested: () => boolean,
     getCancellationFailure: () => unknown,
     abortListener: () => void,
@@ -309,9 +429,40 @@ export class AntigravityProvider implements AgentProvider {
           }
         },
       });
+      if (input.toolChoice === "required" && recordedToolCalls.length === 0) {
+        throw new Error("Model failed to call any tool despite tool_choice='required'.");
+      }
+      if (
+        typeof input.toolChoice === "object" &&
+        input.toolChoice !== null &&
+        input.toolChoice.type === "function"
+      ) {
+        const requiredName = input.toolChoice.function.name;
+        const called = recordedToolCalls.some((c) => c.name === requiredName);
+        if (!called) {
+          throw new Error(
+            `Model failed to call required tool '${requiredName}' despite tool_choice directive.`,
+          );
+        }
+      }
+
       result = isCancelResult(turn, isCancelRequested())
         ? createCancelledResult()
-        : createCompletedResult(turn.agentText);
+        : createCompletedResult(
+            {
+              text: turn.agentText,
+              thoughtText: turn.thoughtText.length > 0 ? turn.thoughtText : undefined,
+              toolCalls: recordedToolCalls.length > 0 ? recordedToolCalls : undefined,
+            },
+            turn.prompt.usage
+              ? {
+                  inputTokens: turn.prompt.usage.inputTokens,
+                  outputTokens: turn.prompt.usage.outputTokens,
+                  totalTokens: turn.prompt.usage.totalTokens,
+                  thoughtTokens: turn.prompt.usage.thoughtTokens,
+                }
+              : undefined,
+          );
     } catch {
       result = isCancelRequested() ? createCancelledResult() : createFailedResult();
     }
@@ -322,6 +473,9 @@ export class AntigravityProvider implements AgentProvider {
 
     let cleanupFailure: unknown;
     try {
+      if (bridge) {
+        await bridge.dispose().catch(() => {});
+      }
       await client.terminate();
     } catch (error) {
       cleanupFailure = error;
@@ -343,30 +497,11 @@ export class AntigravityProvider implements AgentProvider {
 function createDefaultClient(cwd: string, homeDir?: string): AntigravityAcpClient {
   let env: Record<string, string> | undefined;
   if (homeDir) {
-    const configDir = path.join(homeDir, ".config");
-    const dataDir = path.join(homeDir, ".local", "share");
-    const stateDir = path.join(homeDir, ".local", "state");
-    const cacheDir = path.join(homeDir, ".cache");
-    const runDir = path.join(homeDir, ".run");
-
-    try {
-      fs.mkdirSync(configDir, { recursive: true });
-      fs.mkdirSync(dataDir, { recursive: true });
-      fs.mkdirSync(stateDir, { recursive: true });
-      fs.mkdirSync(cacheDir, { recursive: true });
-      fs.mkdirSync(runDir, { recursive: true });
-    } catch {
-      // ignore
-    }
-
     env = {
+      ...(process.env as Record<string, string>),
       HOME: homeDir,
       ANTIGRAVITY_APP_DATA_DIR: homeDir,
-      XDG_CONFIG_HOME: configDir,
-      XDG_DATA_HOME: dataDir,
-      XDG_STATE_HOME: stateDir,
-      XDG_CACHE_HOME: cacheDir,
-      XDG_RUNTIME_DIR: runDir,
+      DISPLAY: process.env["DISPLAY"] ?? ":0",
     };
   }
   return new AcpClient({
@@ -440,13 +575,15 @@ async function closeAntigravityAcpSessionsWithReport(
     ),
   ];
 
-  const mapClient = clientFactory(cwd);
+  const client = clientFactory(cwd);
+  let listedCount = 0;
   try {
-    await withTimeout(mapClient.connect(), ACP_CONNECT_TIMEOUT_MS, "connect");
+    await withTimeout(client.connect(), ACP_CONNECT_TIMEOUT_MS, "connect");
+
     for (const sessionId of dedupedMapped) {
       try {
         await withTimeout(
-          mapClient.closeSession(sessionId),
+          client.closeSession(sessionId),
           ACP_CLOSE_SESSION_TIMEOUT_MS,
           "closeSession",
         );
@@ -458,76 +595,56 @@ async function closeAntigravityAcpSessionsWithReport(
         );
       }
     }
+
+    let listed: ListSessionsResult;
+    try {
+      listed = await withTimeout(
+        client.listSessions(),
+        ACP_LIST_SESSIONS_TIMEOUT_MS,
+        "listSessions",
+      );
+    } catch (error) {
+      warnings.push(
+        `listSessions failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      listed = { sessions: [] };
+    }
+
+    const fromList = [
+      ...new Set(
+        listed.sessions
+          .map((s) => (typeof s.sessionId === "string" ? s.sessionId.trim() : ""))
+          .filter((id) => id.length > 0),
+      ),
+    ];
+    listedCount = fromList.length;
+
+    for (const sessionId of fromList) {
+      if (closedIds.has(sessionId)) {
+        continue;
+      }
+      try {
+        await withTimeout(
+          client.closeSession(sessionId),
+          ACP_CLOSE_SESSION_TIMEOUT_MS,
+          "closeSession",
+        );
+        closedIds.add(sessionId);
+      } catch (error) {
+        closeFailures += 1;
+        warnings.push(
+          `listed close failed for ${sessionId}: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+    }
   } catch (error) {
     warnings.push(
-      `connect for mapped closes failed: ${error instanceof Error ? error.message : String(error)}`,
+      `connect for session cleanup failed: ${error instanceof Error ? error.message : String(error)}`,
     );
     closeFailures += dedupedMapped.length;
   } finally {
-    await safeTerminate(mapClient);
+    await safeTerminate(client);
   }
-
-  const listClient = clientFactory(cwd);
-  let listedCount = 0;
-  try {
-    await withTimeout(listClient.connect(), ACP_CONNECT_TIMEOUT_MS, "connect");
-  } catch (error) {
-    warnings.push(
-      `connect for session/list failed: ${error instanceof Error ? error.message : String(error)}`,
-    );
-    await safeTerminate(listClient);
-    return {
-      mapped_acp_ids_count: dedupedMapped.length,
-      listed_acp_sessions_count: 0,
-      acp_sessions_closed: closedIds.size,
-      acp_close_failures: closeFailures,
-      warnings,
-    };
-  }
-
-  let listed: ListSessionsResult;
-  try {
-    listed = await withTimeout(
-      listClient.listSessions(),
-      ACP_LIST_SESSIONS_TIMEOUT_MS,
-      "listSessions",
-    );
-  } catch (error) {
-    warnings.push(
-      `listSessions failed: ${error instanceof Error ? error.message : String(error)}`,
-    );
-    listed = { sessions: [] };
-  }
-
-  const fromList = [
-    ...new Set(
-      listed.sessions
-        .map((s) => (typeof s.sessionId === "string" ? s.sessionId.trim() : ""))
-        .filter((id) => id.length > 0),
-    ),
-  ];
-  listedCount = fromList.length;
-
-  for (const sessionId of fromList) {
-    if (closedIds.has(sessionId)) {
-      continue;
-    }
-    try {
-      await withTimeout(
-        listClient.closeSession(sessionId),
-        ACP_CLOSE_SESSION_TIMEOUT_MS,
-        "closeSession",
-      );
-      closedIds.add(sessionId);
-    } catch (error) {
-      closeFailures += 1;
-      warnings.push(
-        `listed close failed for ${sessionId}: ${error instanceof Error ? error.message : String(error)}`,
-      );
-    }
-  }
-
-  await safeTerminate(listClient);
 
   return {
     mapped_acp_ids_count: dedupedMapped.length,
@@ -553,7 +670,23 @@ async function terminatePreservingCause(
 }
 
 function promptBlocksFor(input: AgentExecutionInput): readonly ContentBlock[] {
-  const blocks: ContentBlock[] = [textBlock(input.message)];
+  let messageText = input.message;
+  if (input.toolChoice === "required") {
+    messageText +=
+      "\n\n[SYSTEM REQUIREMENT: You MUST invoke at least one of the available functions/tools to complete this request.]";
+  } else if (
+    typeof input.toolChoice === "object" &&
+    input.toolChoice !== null &&
+    input.toolChoice.type === "function"
+  ) {
+    const requiredName = input.toolChoice.function.name;
+    messageText += `\n\n[SYSTEM REQUIREMENT: You MUST call the specific tool '${requiredName}'.]`;
+  }
+  if (input.parallelToolCalls === false) {
+    messageText +=
+      "\n\n[SYSTEM REQUIREMENT: You must call at most one tool at a time. Parallel tool calling is disabled.]";
+  }
+  const blocks: ContentBlock[] = [textBlock(messageText)];
   for (const image of input.images ?? []) {
     blocks.push(imageBlock(image.mimeType, image.data));
   }

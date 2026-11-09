@@ -22,6 +22,26 @@ export interface CursorExecutionContext {
   requiresLocalTool?: boolean;
 }
 
+export interface AgentToolSpec {
+  readonly name: string;
+  readonly description?: string;
+  readonly parameters?: unknown;
+}
+
+export interface AgentToolResultInput {
+  readonly toolCallId: string;
+  readonly toolName?: string;
+  readonly content: string;
+}
+
+export type AgentToolChoice =
+  | "none"
+  | "auto"
+  | "required"
+  | { readonly type: "function"; readonly function: { readonly name: string } };
+
+export type AgentReasoningEffort = "low" | "medium" | "high";
+
 export interface AgentExecutionInput {
   credential: ProviderCredential;
   model: string;
@@ -35,15 +55,37 @@ export interface AgentExecutionInput {
   workingDirectory?: string;
   cursor?: CursorExecutionContext;
   signal?: AbortSignal;
+  /**
+   * Optional function tool specifications forwarded to providers supporting them.
+   */
+  tools?: readonly AgentToolSpec[];
+  toolChoice?: AgentToolChoice;
+  parallelToolCalls?: boolean;
+  toolResults?: readonly AgentToolResultInput[];
+  reasoningEffort?: AgentReasoningEffort;
 }
 
 export type AgentRunStatus = "completed" | "failed" | "cancelled";
+
+export interface AgentExecutionUsage {
+  readonly inputTokens?: number;
+  readonly outputTokens?: number;
+  readonly totalTokens?: number;
+  readonly thoughtTokens?: number;
+}
 
 export interface AgentResult {
   status: AgentRunStatus;
   output?: {
     text: string;
+    thoughtText?: string;
+    toolCalls?: readonly {
+      readonly id: string;
+      readonly name: string;
+      readonly arguments: string;
+    }[];
   };
+  usage?: AgentExecutionUsage;
   error?: {
     message: string;
     code?: string;
@@ -60,6 +102,7 @@ export interface AgentRun {
 export type AgentEvent =
   | AgentRunStartedEvent
   | AgentMessageDeltaEvent
+  | AgentReasoningDeltaEvent
   | AgentToolCallEvent
   | AgentToolResultEvent
   | AgentRunCompletedEvent
@@ -76,6 +119,12 @@ export interface AgentRunStartedEvent {
 
 export interface AgentMessageDeltaEvent {
   type: "message.delta";
+  runId: string;
+  delta: string;
+}
+
+export interface AgentReasoningDeltaEvent {
+  type: "reasoning.delta";
   runId: string;
   delta: string;
 }

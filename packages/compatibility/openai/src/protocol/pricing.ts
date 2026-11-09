@@ -72,6 +72,67 @@ export function responseUsageFromChars(
   };
 }
 
+export function usageFromExecution(
+  model: string,
+  usage?: {
+    inputTokens?: number;
+    outputTokens?: number;
+    totalTokens?: number;
+    thoughtTokens?: number;
+  },
+  promptChars?: number,
+  completionChars?: number,
+) {
+  if (usage?.inputTokens !== undefined && usage?.outputTokens !== undefined) {
+    const promptTokens = usage.inputTokens;
+    const completionTokens = usage.outputTokens;
+    const totalTokens = usage.totalTokens ?? (promptTokens + completionTokens);
+    const reasoningTokens = usage.thoughtTokens ?? 0;
+    return {
+      prompt_tokens: promptTokens,
+      completion_tokens: completionTokens,
+      total_tokens: totalTokens,
+      prompt_tokens_details: { cached_tokens: 0, audio_tokens: 0 },
+      completion_tokens_details: {
+        reasoning_tokens: reasoningTokens,
+        audio_tokens: 0,
+        accepted_prediction_tokens: 0,
+        rejected_prediction_tokens: 0,
+      },
+      cost: costFromTokens(model, promptTokens, completionTokens),
+    };
+  }
+  return usageFromChars(model, promptChars ?? 0, completionChars ?? 0);
+}
+
+export function responseUsageFromExecution(
+  model: string,
+  usage?: {
+    inputTokens?: number;
+    outputTokens?: number;
+    totalTokens?: number;
+    thoughtTokens?: number;
+  },
+  inputChars?: number,
+  outputChars?: number,
+) {
+  if (usage?.inputTokens !== undefined && usage?.outputTokens !== undefined) {
+    const inputTokens = usage.inputTokens;
+    const outputTokens = usage.outputTokens;
+    const totalTokens = usage.totalTokens ?? (inputTokens + outputTokens);
+    const reasoningTokens = usage.thoughtTokens ?? 0;
+    return {
+      input_tokens: inputTokens,
+      input_tokens_details: { cached_tokens: 0 },
+      output_tokens: outputTokens,
+      output_tokens_details: { reasoning_tokens: reasoningTokens },
+      total_tokens: totalTokens,
+      cost: costFromTokens(model, inputTokens, outputTokens),
+    };
+  }
+  return responseUsageFromChars(model, inputChars ?? 0, outputChars ?? 0);
+}
+
 export function serializedToolCallLength(toolCalls: OpenAiToolCall[]): number {
   return toolCalls.reduce(
     (sum, toolCall) =>

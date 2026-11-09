@@ -28,6 +28,7 @@ export async function collectRunOutput(
   if (!output.text && output.toolCalls.length === 0) {
     output.text = result.output?.text ?? "";
   }
+  output.usage = result.usage;
 
   return output;
 }
