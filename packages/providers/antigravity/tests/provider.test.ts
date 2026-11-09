@@ -421,4 +421,34 @@ describe("AntigravityProvider", () => {
     const result = await run.wait();
     expect(result.status).toBe("failed");
   });
+
+  it("allows reasoningEffort for Claude models without throwing and sets thought_level only for gemini-3.8-flash", async () => {
+    const client = new FakeAcpClient();
+    const provider = new AntigravityProvider({
+      clientFactory: () => client,
+    });
+
+    // Claude model with reasoningEffort should execute without throwing
+    const claudeRun = await provider.execute(
+      input({
+        model: "antigravity:claude-sonnet-4-6",
+        reasoningEffort: "medium",
+      }),
+    );
+    const claudeResult = await claudeRun.wait();
+    expect(claudeResult.status).toBe("completed");
+    expect(client.calls.some((c) => c.includes("config:") && c.includes("thought_level"))).toBe(false);
+
+    // Gemini model with reasoningEffort should configure thought_level
+    const geminiRun = await provider.execute(
+      input({
+        sessionId: "session-gemini",
+        model: "antigravity:gemini-3.8-flash",
+        reasoningEffort: "high",
+      }),
+    );
+    const geminiResult = await geminiRun.wait();
+    expect(geminiResult.status).toBe("completed");
+    expect(client.calls.some((c) => c.includes("config:") && c.includes("thought_level:high"))).toBe(true);
+  });
 });

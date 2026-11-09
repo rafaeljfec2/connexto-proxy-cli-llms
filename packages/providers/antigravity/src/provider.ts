@@ -176,12 +176,6 @@ export class AntigravityProvider implements AgentProvider {
       throw new AcpTurnInProgressError();
     }
 
-    if (input.reasoningEffort && acpModel !== "gemini-3.8-flash") {
-      throw new Error(
-        `Reasoning effort is not supported for model '${input.model}'. Only gemini-3.8-flash supports thought_level.`,
-      );
-    }
-
     if (
       typeof input.toolChoice === "object" &&
       input.toolChoice !== null &&
