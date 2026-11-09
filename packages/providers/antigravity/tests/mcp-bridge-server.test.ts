@@ -309,4 +309,206 @@ describe("Antigravity MCP Bridge Server", () => {
 
     client.destroy();
   });
+
+  describe("Hardening parallel_tool_calls: false enforcement", () => {
+    it("delegates first call and rejects second call in same turn with MCP error and no onToolCall event", async () => {
+      const callsReceived: string[] = [];
+      bridge = new AntigravityMcpBridge({
+        sessionId: "test-sess-anti-parallel",
+        allowParallelToolCalls: false,
+        tools: [
+          { name: "get_weather", description: "Get weather" },
+          { name: "get_time", description: "Get time" },
+        ],
+        onToolCall: (call) => callsReceived.push(call.name),
+      });
+
+      await bridge.start();
+      const client = net.connect(bridge.socketAddress);
+      const rl = readline.createInterface({ input: client, terminal: false });
+
+      const responses: any[] = [];
+      rl.on("line", (line) => responses.push(JSON.parse(line)));
+
+      // 1. First call in turn: must succeed and emit onToolCall
+      client.write(
+        JSON.stringify({
+          jsonrpc: "2.0",
+          id: 1,
+          method: "tools/call",
+          params: { name: "get_weather", arguments: { city: "Rio" } },
+        }) + "\n",
+      );
+      await new Promise((r) => setTimeout(r, 50));
+
+      expect(responses[0].result.isError).toBeFalsy();
+      expect(responses[0].result.content[0].text).toContain("[DELEGATED_TO_CLIENT: tool_call_id=");
+      expect(callsReceived).toEqual(["get_weather"]);
+
+      // 2. Second call in same turn: must be rejected with error, no onToolCall event
+      client.write(
+        JSON.stringify({
+          jsonrpc: "2.0",
+          id: 2,
+          method: "tools/call",
+          params: { name: "get_time", arguments: {} },
+        }) + "\n",
+      );
+      await new Promise((r) => setTimeout(r, 50));
+
+      expect(responses[1].result.isError).toBe(true);
+      expect(responses[1].result.content[0].text).toContain(
+        "parallel tool calling is disabled (parallel_tool_calls=false)",
+      );
+      // Crucial: callsReceived must still contain ONLY the first call!
+      expect(callsReceived).toEqual(["get_weather"]);
+
+      client.destroy();
+    });
+
+    it("allows a new call in a subsequent turn after resetTurn()", async () => {
+      const callsReceived: string[] = [];
+      bridge = new AntigravityMcpBridge({
+        sessionId: "test-sess-multi-turn-anti-parallel",
+        allowParallelToolCalls: false,
+        tools: [
+          { name: "tool_step1", description: "Step 1" },
+          { name: "tool_step2", description: "Step 2" },
+        ],
+        onToolCall: (call) => callsReceived.push(call.name),
+      });
+
+      await bridge.start();
+      const client = net.connect(bridge.socketAddress);
+      const rl = readline.createInterface({ input: client, terminal: false });
+
+      const responses: any[] = [];
+      rl.on("line", (line) => responses.push(JSON.parse(line)));
+
+      // Turn 1: call 1 succeeds
+      client.write(
+        JSON.stringify({
+          jsonrpc: "2.0",
+          id: 10,
+          method: "tools/call",
+          params: { name: "tool_step1", arguments: {} },
+        }) + "\n",
+      );
+      await new Promise((r) => setTimeout(r, 50));
+      expect(responses[0].result.isError).toBeFalsy();
+      expect(callsReceived).toEqual(["tool_step1"]);
+
+      // Advance to Turn 2
+      bridge.resetTurn();
+      expect(bridge.currentTurnCallsCount).toBe(0);
+
+      // Turn 2: call 2 succeeds
+      client.write(
+        JSON.stringify({
+          jsonrpc: "2.0",
+          id: 11,
+          method: "tools/call",
+          params: { name: "tool_step2", arguments: {} },
+        }) + "\n",
+      );
+      await new Promise((r) => setTimeout(r, 50));
+      expect(responses[1].result.isError).toBeFalsy();
+      expect(callsReceived).toEqual(["tool_step1", "tool_step2"]);
+
+      client.destroy();
+    });
+
+    it("atomically handles concurrent tool calls under race condition without exceeding limit", async () => {
+      const callsReceived: string[] = [];
+      bridge = new AntigravityMcpBridge({
+        sessionId: "test-sess-race",
+        allowParallelToolCalls: false,
+        tools: [
+          { name: "race_tool_a", description: "A" },
+          { name: "race_tool_b", description: "B" },
+        ],
+        onToolCall: (call) => callsReceived.push(call.name),
+      });
+
+      await bridge.start();
+      const client = net.connect(bridge.socketAddress);
+      const rl = readline.createInterface({ input: client, terminal: false });
+
+      const responses: any[] = [];
+      rl.on("line", (line) => responses.push(JSON.parse(line)));
+
+      // Write two calls simultaneously in the same socket buffer
+      const req1 = JSON.stringify({
+        jsonrpc: "2.0",
+        id: 101,
+        method: "tools/call",
+        params: { name: "race_tool_a", arguments: {} },
+      });
+      const req2 = JSON.stringify({
+        jsonrpc: "2.0",
+        id: 102,
+        method: "tools/call",
+        params: { name: "race_tool_b", arguments: {} },
+      });
+      client.write(req1 + "\n" + req2 + "\n");
+
+      await new Promise((r) => setTimeout(r, 100));
+
+      expect(responses).toHaveLength(2);
+
+      const successful = responses.filter((r) => !r.result.isError);
+      const rejected = responses.filter((r) => r.result.isError);
+
+      expect(successful).toHaveLength(1);
+      expect(rejected).toHaveLength(1);
+      expect(rejected[0].result.content[0].text).toContain("parallel tool calling is disabled");
+      expect(callsReceived).toHaveLength(1);
+
+      client.destroy();
+    });
+
+    it("preserves default behavior allowing multiple calls when allowParallelToolCalls is true or omitted", async () => {
+      const callsWithTrue: string[] = [];
+      const bridgeWithTrue = new AntigravityMcpBridge({
+        sessionId: "test-sess-parallel-true",
+        allowParallelToolCalls: true,
+        tools: [{ name: "tool_1" }, { name: "tool_2" }],
+        onToolCall: (call) => callsWithTrue.push(call.name),
+      });
+
+      await bridgeWithTrue.start();
+      const client = net.connect(bridgeWithTrue.socketAddress);
+      const rl = readline.createInterface({ input: client, terminal: false });
+
+      const responses: any[] = [];
+      rl.on("line", (line) => responses.push(JSON.parse(line)));
+
+      client.write(
+        JSON.stringify({
+          jsonrpc: "2.0",
+          id: 1,
+          method: "tools/call",
+          params: { name: "tool_1", arguments: {} },
+        }) + "\n",
+      );
+      client.write(
+        JSON.stringify({
+          jsonrpc: "2.0",
+          id: 2,
+          method: "tools/call",
+          params: { name: "tool_2", arguments: {} },
+        }) + "\n",
+      );
+
+      await new Promise((r) => setTimeout(r, 100));
+
+      expect(responses).toHaveLength(2);
+      expect(responses[0].result.isError).toBeFalsy();
+      expect(responses[1].result.isError).toBeFalsy();
+      expect(callsWithTrue).toHaveLength(2);
+
+      client.destroy();
+      await bridgeWithTrue.dispose();
+    });
+  });
 });

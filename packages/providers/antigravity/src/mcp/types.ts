@@ -31,6 +31,7 @@ export interface AntigravityMcpBridgeOptions {
   readonly policies?: Record<string, ToolPolicy>;
   readonly executor?: McpToolExecutor;
   readonly timeoutMs?: number;
+  readonly allowParallelToolCalls?: boolean;
   readonly onToolCall?: (call: McpBridgeToolCallRequest) => void;
   readonly onToolResult?: (callId: string, result: McpBridgeToolCallResult) => void;
 }

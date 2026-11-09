@@ -224,6 +224,7 @@ export class AntigravityProvider implements AgentProvider {
         bridge = new AntigravityMcpBridge({
           sessionId: input.sessionId,
           tools: input.tools,
+          allowParallelToolCalls: input.parallelToolCalls !== false,
           onToolCall: (call) => {
             this.pendingTools.register({
               callId: call.callId,

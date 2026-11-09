@@ -21,6 +21,7 @@ export class AntigravityMcpBridge {
   private readonly sockets = new Set<net.Socket>();
   private readonly options: AntigravityMcpBridgeOptions;
   private isDisposed = false;
+  private currentTurnDelegatedCount = 0;
 
   constructor(options: AntigravityMcpBridgeOptions) {
     this.options = options;
@@ -30,6 +31,14 @@ export class AntigravityMcpBridge {
 
   public get socketAddress(): string {
     return this.socketPath;
+  }
+
+  public get currentTurnCallsCount(): number {
+    return this.currentTurnDelegatedCount;
+  }
+
+  public resetTurn(): void {
+    this.currentTurnDelegatedCount = 0;
   }
 
   public async start(): Promise<McpServerConfig> {
@@ -151,6 +160,28 @@ export class AntigravityMcpBridge {
             ? callParams.arguments
             : {}
         ) as Record<string, unknown>;
+
+        // Atomic check: enforce parallel tool calls policy synchronously
+        const allowParallel = this.options.allowParallelToolCalls ?? true;
+        if (!allowParallel && this.currentTurnDelegatedCount >= 1) {
+          send({
+            jsonrpc: "2.0",
+            id,
+            result: {
+              content: [
+                {
+                  type: "text",
+                  text: `Tool call '${toolName}' rejected: parallel tool calling is disabled (parallel_tool_calls=false). Only one tool call is permitted per turn. Complete this turn before calling another tool.`,
+                },
+              ],
+              isError: true,
+            },
+          });
+          return;
+        }
+
+        // Atomically claim the slot for this turn
+        this.currentTurnDelegatedCount += 1;
 
         const callId = `call_${randomUUID().replaceAll("-", "").slice(0, 16)}`;
         const callRequest: McpBridgeToolCallRequest = {
