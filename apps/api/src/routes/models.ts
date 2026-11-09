@@ -8,13 +8,12 @@ import {
 import {
   ANTIGRAVITY_MODELS,
   findAntigravityModel,
+  type AntigravityModel,
 } from "@agent-runtime-gateway/provider-antigravity";
 
 const MODEL_CREATED_AT = 1_735_689_600;
 
-function antigravityModelObject(model: {
-  readonly id: string;
-}): Record<string, unknown> {
+function antigravityModelObject(model: AntigravityModel): Record<string, unknown> {
   return {
     id: model.id,
     object: "model",
@@ -23,6 +22,7 @@ function antigravityModelObject(model: {
     permission: [],
     root: model.id,
     parent: null,
+    capabilities: model.capabilities,
   };
 }
 

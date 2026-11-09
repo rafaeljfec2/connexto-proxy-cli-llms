@@ -10,6 +10,8 @@ export {
   ANTIGRAVITY_MODELS,
   acpModelId,
   findAntigravityModel,
+  type AntigravityModel,
+  type ModelCapabilities,
 } from "./models.js";
 export {
   AntigravityAuthError,
