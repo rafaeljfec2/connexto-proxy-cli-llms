@@ -210,11 +210,15 @@ function writePublicError(
 
   const logger = getLogger();
   if (publicError.status >= 500) {
-    logger.error(logFields, "request processing error");
     const causeMessage = debugCauseMessage(sourceError);
-    if (causeMessage !== undefined) {
-      logger.debug({ ...logFields, causeMessage }, "request processing error cause");
-    }
+    logger.error(
+      {
+        ...logFields,
+        ...(causeMessage !== undefined ? { causeMessage } : {}),
+        stack: sourceError instanceof Error ? sourceError.stack : undefined,
+      },
+      "request processing error",
+    );
   } else if (publicError.status === 429) {
     logger.warn(logFields, "request failed");
   }

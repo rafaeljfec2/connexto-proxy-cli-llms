@@ -505,9 +505,10 @@ function createDefaultClient(cwd: string, homeDir?: string): AntigravityAcpClien
       DISPLAY: process.env["DISPLAY"] ?? ":0",
     };
   }
+  const safeCwd = fs.existsSync(cwd) ? cwd : process.cwd();
   return new AcpClient({
     command: resolveAgyCommand(),
-    cwd,
+    cwd: safeCwd,
     env,
     clientInfo: DEFAULT_CLIENT_INFO,
     authMethodId: DEFAULT_AUTH_METHOD_ID,
