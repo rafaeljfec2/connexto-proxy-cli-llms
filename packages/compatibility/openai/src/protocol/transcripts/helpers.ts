@@ -84,14 +84,23 @@ export function appendStopConstraint(constraints: string[], stop: unknown): void
 
 export function appendJsonConstraint(constraints: string[], format: unknown): void {
   if (!isRecord(format)) return;
-  if (format.type === "json_object")
-    constraints.push("Return a single valid JSON object and no surrounding prose.");
+  if (format.type === "json_object") {
+    constraints.push(
+      "Return ONLY a single raw valid JSON object with no Markdown code fences (no ```json or ```) and no surrounding prose.",
+    );
+  }
   if (format.type === "json_schema") {
     const schema = isRecord(format.json_schema)
       ? format.json_schema.schema
       : format.schema;
+    const strictFlag =
+      format.strict === true ||
+      (isRecord(format.json_schema) && format.json_schema.strict === true);
+    const strictNote = strictFlag
+      ? " Strictly satisfy all required fields and disallow additional properties."
+      : "";
     constraints.push(
-      `Return JSON that matches this schema: ${JSON.stringify(schema ?? format)}`,
+      `Return ONLY a single raw valid JSON value matching this JSON Schema, with NO Markdown code fences (no \`\`\`json or \`\`\`) and NO surrounding text:${strictNote} ${JSON.stringify(schema ?? format)}`,
     );
   }
 }
@@ -216,7 +225,9 @@ export function toolCallContextFromMessages(
     .map((message) => {
       if (!isRecord(message)) return undefined;
       const role = typeof message.role === "string" ? message.role : "user";
-      return workingDirectoryFromText(contentToTextAndImages(message.content, role).text);
+      return workingDirectoryFromText(
+        contentToTextAndImages(message.content, role).text,
+      );
     })
     .find(Boolean);
   return workingDirectory ? { workingDirectory } : undefined;

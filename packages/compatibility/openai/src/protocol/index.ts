@@ -3,6 +3,7 @@ export * from "./common.js";
 export * from "./constants.js";
 export * from "./pricing.js";
 export * from "./formatters.js";
+export * from "./structured-output.js";
 export * from "./sse.js";
 export * from "./tools/specs.js";
 export * from "./tools/candidates.js";
