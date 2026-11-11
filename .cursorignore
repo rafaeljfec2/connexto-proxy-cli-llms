@@ -1,0 +1,33 @@
+# Cursor context exclusions for connexto-proxy-cli-llms
+# (pnpm workspace: apps/api, apps/host-browser-bridge, packages/*).
+# .gitignore and Cursor's default list already skip node_modules, lockfiles,
+# and .env*. Patterns below cover this repo's build output and local caches,
+# and re-include the env contract the agent should still read.
+
+# Secrets stay out of Agent, Tab, and @ mentions.
+.env
+.env.*
+!.env.example
+
+# Dependencies and package-manager caches
+node_modules/
+**/node_modules/
+.pnpm-store/
+.turbo/
+
+# TypeScript emit and test coverage
+**/dist/
+coverage/
+*.tsbuildinfo
+
+# Source maps checked in next to generated scripts
+**/*.js.map
+**/*.d.ts.map
+
+# Local workflow and tool caches
+.connexto/
+.serena/cache/
+.serena/project.local.yml
+.vitest-exit.code
+
+*.log
