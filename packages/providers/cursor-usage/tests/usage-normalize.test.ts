@@ -98,4 +98,64 @@ describe("normalizeCursorUsagePayload", () => {
     expect(normalized.prepaid_available_credits).toBe(4.19);
     expect(normalized.analytics_agent_requests_total).toBe(42);
   });
+
+  it("extracts expanded usage-status fields alongside weeklyIncludedUsage", () => {
+    const normalized = normalizeCursorUsagePayload({
+      usageStatus: {
+        availability: "available",
+        monthlyUsage: {
+          usedCents: 922,
+          limitCents: null,
+          additionalUsageOff: false,
+          creditsUsedCents: 0,
+          periodStart: "2026-11-01T00:00:00.000Z",
+          resetsAt: "2026-12-01T00:00:00.000Z",
+        },
+        weeklyIncludedStatus: {
+          status: "metered",
+        },
+        weeklyIncludedUsage: {
+          usedCents: 18,
+          budgetCents: 16159,
+          resetCounter: 4,
+          periodStart: "2026-11-09T21:45:07.488Z",
+          resetsAt: "2026-11-16T21:45:07.488Z",
+        },
+        weeklyIncludedUsageByProduct: [
+          {
+            product: "cursor",
+            cents: 18,
+          },
+        ],
+      },
+      prepaid: {
+        availableCents: "79",
+      },
+    });
+
+    expect(normalized.usage_availability).toBe("available");
+    expect(normalized.weekly_included_status).toBe("metered");
+    expect(normalized.total_usage).toBe(0.18);
+    expect(normalized.total_credits).toBe(161.59);
+    expect(normalized.weekly_period_start).toBe("2026-11-09T21:45:07.488Z");
+    expect(normalized.weekly_resets_at).toBe("2026-11-16T21:45:07.488Z");
+    expect(normalized.weekly_reset_counter).toBe(4);
+    expect(normalized.weekly_used_percent).toBeCloseTo((18 / 16159) * 100, 4);
+    expect(normalized.weekly_usage_by_product).toEqual([
+      {
+        product: "cursor",
+        used_cents: 18,
+        used_usd: 0.18,
+        used_percent: (18 / 16159) * 100,
+      },
+    ]);
+    expect(normalized.monthly_additional_usage).toBe(9.22);
+    expect(normalized.monthly_spent).toBe(9.22);
+    expect(normalized.monthly_limit).toBeUndefined();
+    expect(normalized.monthly_credits_used).toBe(0);
+    expect(normalized.monthly_additional_usage_off).toBe(false);
+    expect(normalized.monthly_period_start).toBe("2026-11-01T00:00:00.000Z");
+    expect(normalized.monthly_resets_at).toBe("2026-12-01T00:00:00.000Z");
+    expect(normalized.prepaid_available_credits).toBe(0.79);
+  });
 });

@@ -796,7 +796,10 @@ function normalizeUsagePayloadFromNetwork(raw: unknown): Record<string, unknown>
   const body = raw as Record<string, unknown>;
   if (
     body.weeklyIncludedUsage !== undefined ||
-    body.weekly_included_usage !== undefined
+    body.weekly_included_usage !== undefined ||
+    body.monthlyUsage !== undefined ||
+    body.weeklyIncludedUsageByProduct !== undefined ||
+    body.availability !== undefined
   ) {
     return normalizeCursorUsagePayload(body);
   }

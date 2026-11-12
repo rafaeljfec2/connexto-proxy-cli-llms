@@ -20,6 +20,13 @@ export function resolveCollectApiUrl(
   return `${base}${pathSuffix}`;
 }
 
+export interface CursorProductWeeklyUsage {
+  readonly product: string;
+  readonly used_cents: number;
+  readonly used_usd: number;
+  readonly used_percent?: number;
+}
+
 export function normalizeCursorUsagePayload(
   usageStatus: unknown,
   analytics?: unknown,
@@ -80,6 +87,17 @@ export function normalizeCursorUsagePayload(
     raw_usage_status: status,
   };
 
+  const availability = readString(status.availability);
+  if (availability !== undefined) {
+    result.usage_availability = availability;
+  }
+
+  const weeklyStatus = readRecord(status.weeklyIncludedStatus);
+  const weeklyIncludedStatus = readString(weeklyStatus?.status);
+  if (weeklyIncludedStatus !== undefined) {
+    result.weekly_included_status = weeklyIncludedStatus;
+  }
+
   if (usedCents !== undefined) {
     result.total_usage = usedCents / 100;
   }
@@ -87,14 +105,34 @@ export function normalizeCursorUsagePayload(
     result.total_credits = budgetCents / 100;
   }
 
+  const periodStart = readString(weekly?.periodStart);
+  if (periodStart !== undefined) {
+    result.weekly_period_start = periodStart;
+  }
+
   const resetsAt = readString(weekly?.resetsAt ?? status.resetsAt);
   if (resetsAt !== undefined) {
     result.weekly_resets_at = resetsAt;
   }
 
+  const resetCounter = readNumber(weekly?.resetCounter);
+  if (resetCounter !== undefined) {
+    result.weekly_reset_counter = resetCounter;
+  }
+
   if (usedCents !== undefined && budgetCents !== undefined && budgetCents > 0) {
     result.weekly_used_percent = (usedCents / budgetCents) * 100;
   }
+
+  const byProduct = extractWeeklyUsageByProduct(
+    status.weeklyIncludedUsageByProduct,
+    budgetCents,
+  );
+  if (byProduct.length > 0) {
+    result.weekly_usage_by_product = byProduct;
+  }
+
+  applyMonthlyUsage(result, monthly);
 
   if (prepaid !== undefined) {
     result.raw_prepaid_billing = prepaid;
@@ -103,7 +141,7 @@ export function normalizeCursorUsagePayload(
       result.prepaid_available_credits = availableCents / 100;
     }
     const spentThisMonthCents = readNumber(prepaid.spentThisMonthCents ?? prepaid.spentCents);
-    if (spentThisMonthCents !== undefined) {
+    if (spentThisMonthCents !== undefined && result.monthly_spent === undefined) {
       result.monthly_spent = spentThisMonthCents / 100;
     }
     const fundedCents = readNumber(prepaid.fundedCents);
@@ -121,6 +159,69 @@ export function normalizeCursorUsagePayload(
   }
 
   return result;
+}
+
+function applyMonthlyUsage(
+  result: Record<string, unknown>,
+  monthly: Record<string, unknown> | undefined,
+): void {
+  if (monthly === undefined) {
+    return;
+  }
+  const usedCents = readNumber(monthly.usedCents);
+  if (usedCents !== undefined) {
+    const usedUsd = usedCents / 100;
+    result.monthly_additional_usage = usedUsd;
+    result.monthly_spent = usedUsd;
+  }
+  const limitCents = readNumber(monthly.limitCents);
+  if (limitCents !== undefined) {
+    result.monthly_limit = limitCents / 100;
+  }
+  const creditsUsedCents = readNumber(monthly.creditsUsedCents);
+  if (creditsUsedCents !== undefined) {
+    result.monthly_credits_used = creditsUsedCents / 100;
+  }
+  const additionalUsageOff = readBoolean(monthly.additionalUsageOff);
+  if (additionalUsageOff !== undefined) {
+    result.monthly_additional_usage_off = additionalUsageOff;
+  }
+  const periodStart = readString(monthly.periodStart);
+  if (periodStart !== undefined) {
+    result.monthly_period_start = periodStart;
+  }
+  const resetsAt = readString(monthly.resetsAt);
+  if (resetsAt !== undefined) {
+    result.monthly_resets_at = resetsAt;
+  }
+}
+
+function extractWeeklyUsageByProduct(
+  raw: unknown,
+  budgetCents: number | undefined,
+): CursorProductWeeklyUsage[] {
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+  const items: CursorProductWeeklyUsage[] = [];
+  for (const entry of raw) {
+    const row = readRecord(entry);
+    const product = readString(row?.product)?.trim();
+    const cents = readNumber(row?.cents ?? row?.usedCents);
+    if (product === undefined || product.length === 0 || cents === undefined) {
+      continue;
+    }
+    const item: CursorProductWeeklyUsage = {
+      product,
+      used_cents: cents,
+      used_usd: cents / 100,
+      ...(budgetCents !== undefined && budgetCents > 0
+        ? { used_percent: (cents / budgetCents) * 100 }
+        : {}),
+    };
+    items.push(item);
+  }
+  return items;
 }
 
 function summarizeAnalytics(analytics: unknown): number | undefined {
@@ -165,6 +266,13 @@ function readNumber(value: unknown): number | undefined {
 
 function readString(value: unknown): string | undefined {
   if (typeof value === "string" && value.trim() !== "") {
+    return value;
+  }
+  return undefined;
+}
+
+function readBoolean(value: unknown): boolean | undefined {
+  if (typeof value === "boolean") {
     return value;
   }
   return undefined;
